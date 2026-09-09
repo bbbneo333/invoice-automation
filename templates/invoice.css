@@ -1,0 +1,66 @@
+@page {
+  size: A4;
+  margin: 14mm 16mm;
+}
+
+body {
+  margin: 0;
+  color: #1d1d1f;
+  font: 13.5px/1.38 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  margin: 0 0 22px;
+  padding: 0 0 13px;
+  border-bottom: 1px solid #d2d2d7;
+  color: #365b85;
+  font: 600 23px/1.1 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+p { margin: 0 0 7px; }
+.from { margin-bottom: 16px; }
+.bill-to { margin-bottom: 16px; }
+.bill-to .heading { margin-bottom: 10px; }
+.rates { margin-top: 18px; }
+.payment { margin-top: 18px; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.meta { margin-bottom: 18px; }
+.meta td {
+  width: 50%;
+  border: 1px solid #aeb4bc;
+  padding: 3px 8px;
+}
+
+.items th, .items td {
+  border: 1px solid #aeb4bc;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.items th {
+  background: #f5f5f7;
+  color: #25282c;
+  font-weight: 600;
+}
+.items th:nth-child(1) { width: 55%; }
+.items th:nth-child(2) { width: 20%; }
+.items th:nth-child(3) { width: 25%; }
+.items td { height: 56px; }
+.detail { margin-top: 7px; }
+
+.totals { margin-top: 12px; }
+.totals td {
+  border: 1px solid #aeb4bc;
+  padding: 3px 8px;
+}
+.totals td:first-child { width: 75%; }
+.totals td:last-child { width: 25%; }
+.totals .grand td { font-weight: bold; }

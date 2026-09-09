@@ -1,0 +1,10 @@
+{
+  "projects": [
+    {
+      "label": "CLIENT",
+      "configPath": "/path/to/portable-project/config.json",
+      "storageKey": "client-example",
+      "active": true
+    }
+  ]
+}

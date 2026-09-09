@@ -1,0 +1,65 @@
+{
+  "jira": {
+    "enabled": false,
+    "domain": "your-company",
+    "email": "you@example.com",
+    "apiToken": "replace-with-a-jira-api-token",
+    "assignee": "currentUser",
+    "issueTypes": ["Story", "Task", "Bug"],
+    "inProgressStatus": "In Progress",
+    "doneStatus": "Done"
+  },
+  "reimbursements": {
+    "gstTreatment": "excludedFromTaxableValue"
+  },
+  "rateUsd": 50,
+  "exchRate": 83,
+  "from": {
+    "name": "Example Supplier",
+    "address": "Supplier address",
+    "email": "supplier@example.com",
+    "phone": "",
+    "gst": {
+      "gstin": "08AAAAA0000A1Z5",
+      "state": "Rajasthan",
+      "stateCode": "08"
+    }
+  },
+  "client": {
+    "name": "Example Client",
+    "address": "Client address",
+    "email": "billing@example.com",
+    "phone": "",
+    "gst": {
+      "gstin": "29BBBBB0000B1Z4",
+      "state": "Karnataka",
+      "stateCode": "29"
+    }
+  },
+  "taxProfile": {
+    "enabled": true,
+    "effectiveFrom": "2026-01-01",
+    "sacCode": "998314",
+    "sacDescription": "Information technology consulting and support services",
+    "ratePercent": 18,
+    "amountsIncludeTax": false,
+    "reverseCharge": false,
+    "defaultTreatment": "interState"
+  },
+  "bank": {
+    "name": "Example Bank",
+    "holder": "Example Supplier",
+    "account": "000000000000",
+    "ifsc": "EXAMPLE0001"
+  },
+  "outputDir": "/absolute/path/to/generated-invoices",
+  "invoices": [
+    {
+      "month": "January 2026",
+      "invoiceNo": "001",
+      "hours": 0,
+      "amount": 0,
+      "reimbursements": []
+    }
+  ]
+}

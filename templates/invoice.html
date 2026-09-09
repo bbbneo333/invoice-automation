@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }} {{ invoice.number }}</title>
+  <style>{% include "invoice.css" %}</style>
+</head>
+<body>
+  <h1>{{ title }}</h1>
+
+  <section class="from">
+    <p><strong>{{ supplier.name }}</strong></p>
+    <p>{{ supplier.address }}</p>
+    <p>Email: {{ supplier.email }}</p>
+    <p>Phone: {{ supplier.phone }}</p>
+    {% if tax.enabled %}<p><strong>GSTIN:</strong> {{ supplier.gst.gstin }}</p>{% endif %}
+  </section>
+
+  <table class="meta">
+    <tr><td>Invoice Date:</td><td>{{ invoice.date }}</td></tr>
+    <tr><td>Invoice Period:</td><td>{{ invoice.period }}</td></tr>
+    <tr><td>Invoice #:</td><td>{{ invoice.number }}</td></tr>
+  </table>
+
+  <section class="bill-to">
+    <p class="heading"><strong>Bill To:</strong></p>
+    <p>{{ client.name }}</p>
+    <p>{{ client.address }}</p>
+    {% if client.email %}<p>Email: {{ client.email }}</p>{% endif %}
+    {% if client.phone %}<p>Phone: {{ client.phone }}</p>{% endif %}
+    {% if tax.enabled %}<p><strong>GSTIN:</strong> {{ client.gst.gstin }}</p>{% endif %}
+  </section>
+
+  <table class="items">
+    <thead><tr><th>Description</th><th>Hours / Qty</th><th>Amount (INR)</th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td>
+          <strong>{{ item.description }}</strong>
+          {% if item.detail %}<div class="detail">{{ item.detail }}</div>{% endif %}
+          {% if item.sacCode %}<div class="detail"><strong>SAC:</strong> {{ item.sacCode }} - {{ item.sacDescription }}</div>{% endif %}
+        </td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.amount }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    {% if tax.enabled %}<tr><td>Taxable Value:</td><td>{{ totals.taxableValue }}</td></tr>{% endif %}
+    {% for row in tax.rows %}<tr><td>{{ row.name }} @ {{ row.rate }}%:</td><td>{{ row.amount }}</td></tr>{% endfor %}
+    <tr class="grand"><td>Total:</td><td>{{ totals.grandTotal }}</td></tr>
+  </table>
+
+  <section class="rates">
+    <p><strong>Hourly Rate:</strong> {{ rates.usd }} USD per hour (billed in INR equivalent)</p>
+    <p><strong>Exchange Rate Applied:</strong> 1 USD = {{ rates.exchange }} INR</p>
+  </section>
+
+  {% if bank %}
+  <section class="payment">
+    <p><strong>Payment Details:</strong></p>
+    <p>Bank Name: {{ bank.name }}</p>
+    <p>Account Holder Name: {{ bank.holder }}</p>
+    <p>Account Number: {{ bank.account }}</p>
+    <p>IFSC: {{ bank.ifsc }}</p>
+  </section>
+  {% endif %}
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Local environment overrides
+.env
+.env.*
+!.env.example
+
+# Language/package build output
+node_modules/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+macos-timer/.build/
+macos-timer/build/
+
+# macOS/editor files
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/

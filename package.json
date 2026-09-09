@@ -1,0 +1,13 @@
+{
+  "name": "invoice-automation-renderer",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "setup:renderer": "playwright install chromium"
+  },
+  "dependencies": {
+    "nunjucks": "^3.2.4",
+    "playwright": "^1.54.0"
+  }
+}
