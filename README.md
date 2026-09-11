@@ -157,7 +157,41 @@ or moving the output directory, and do not lower its counter.
 and `dailyTargetHours` overrides. `reimbursements.json` is an array of entries
 with `id`, `name`, `amount`, and an optional relative `attachment` path. Hours and
 invoice amounts are calculated from `timelog.json`, reimbursement entries, and
-project settings; they are not duplicated in invoice metadata or config.
+project settings. Successful invoice generation saves the values used in
+`invoice.json` under `snapshot`; project config remains input only.
+
+### Invoice snapshots
+
+Generation saves invoice identity and ISO dates, supplier/customer details,
+service descriptions and SAC, hours and conversion rates, GST treatment and tax
+breakdown, reimbursement amounts/treatment/attachment references, totals, locale,
+and printed bank details. Decimal values are JSON strings. `snapshot.version`
+and `generatedAt` identify the format and generation time. Display text is derived
+from these structured values; no renderer context or draft/issued status is stored.
+Credentials and the full config are not copied. Top-level `pdfSha256` identifies the corresponding PDF.
+
+Normal generation creates or refreshes a snapshot only after rendering
+succeeds. Older invoices are **not backfilled**. Explicitly regenerating an older
+invoice creates its first snapshot from current inputs; it does not reconstruct
+historical values from its old PDF. Merely reading an invoice or using the timer
+does not create a snapshot.
+
+To reproduce an invoice from its saved values, without recalculating from current
+rates, tax settings, reimbursements, or time logs:
+
+```sh
+ruby src/generate_invoice.rb --reproduce "September 2026"
+```
+
+This requires an existing snapshot and preserves its saved billing values. It uses
+the current HTML/CSS template, so layout and PDF bytes can differ after template
+or renderer updates. Keep the original PDF for an exact archival copy. The active
+project config is still used to locate the output directory.
+
+Existing snapshots from the previous format remain readable. On explicit generation
+or reproduction, obsolete `status` and `renderContext` fields are removed from
+that invoice only. No older invoices are scanned or rewritten for this cleanup.
+Monthly target overrides remain outside the snapshot.
 
 Normal timer actions, target edits, reimbursements, and generation never write
 the project config. The application registry still stores the active project
@@ -396,6 +430,7 @@ ruby test/test_document_locale.rb
 ruby test/test_generate_timesheet.rb
 ruby test/test_reimbursements.rb
 ruby test/test_invoice_store.rb
+ruby test/test_invoice_snapshot.rb
 ruby test/test_jira_support.rb
 ruby -c src/time_log.rb
 ruby -c src/generate_month.rb

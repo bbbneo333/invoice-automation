@@ -78,6 +78,31 @@ class InvoiceStore
     end
   end
 
+  # Publish only a successfully rendered PDF, preserving unrelated monthly metadata.
+  def save_generation(month, snapshot, rendered_path, output_path, reproduce: false)
+    locked do |records, _|
+      record = records.find { |item| item["month"] == month }
+      raise "No invoice record for #{month}" unless record
+      if reproduce && record.fetch("snapshot", {}).reject { |key, _| key == "renderContext" } != snapshot
+        raise "Invoice snapshot changed during reproduction; retry"
+      end
+      previous_pdf = File.binread(output_path) if File.file?(output_path)
+      updated = record.reject { |key, _| key == "status" }.merge("snapshot" => snapshot)
+      updated["pdfSha256"] = Digest::SHA256.file(rendered_path).hexdigest
+      begin
+        self.class.write_bytes(output_path, File.binread(rendered_path))
+        self.class.write_json(File.join(directory(record), "invoice.json"), updated)
+      rescue StandardError
+        if previous_pdf
+          self.class.write_bytes(output_path, previous_pdf)
+        else
+          FileUtils.rm_f(output_path)
+        end
+        raise
+      end
+    end
+  end
+
   def update_reimbursements(month)
     locked do |records, _|
       record = records.find { |item| item["month"] == month }

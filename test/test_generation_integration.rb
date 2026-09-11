@@ -73,6 +73,13 @@ class GenerationIntegrationTest < Minitest::Test
       assert_equal original_config, File.binread(config_path)
       assert File.file?(File.join(target, "timelog.json"))
       assert_equal 1, JSON.parse(File.read(File.join(target, "reimbursements.json"))).length
+      snapshot = record.fetch("snapshot")
+      refute record.key?("status")
+      refute snapshot.key?("renderContext")
+      assert_equal "de-DE", snapshot.fetch("locale")
+      assert_equal "7.5", snapshot.fetch("service").fetch("hours")
+      assert_equal 1, snapshot.fetch("reimbursements").length
+      assert_equal snapshot.fetch("invoiceNo"), record.fetch("invoiceNo")
       prefix = record.fetch("invoiceNo")
       pdf = File.join(target, "#{prefix} Invoice - August 2026.pdf")
       xlsx = File.join(target, "#{prefix} Timesheet - August 2026.xlsx")
@@ -88,6 +95,9 @@ class GenerationIntegrationTest < Minitest::Test
       command(environment, "generate_timesheet.rb", "--data", File.join(__dir__, "fixtures", "timesheet_rows.json"), "--output", standalone)
       assert File.file?(standalone)
       assert_equal pdf, command(environment, "generate_invoice.rb", "August 2026").strip
+      saved = JSON.parse(File.read(File.join(target, "invoice.json"))).fetch("snapshot")
+      assert_equal pdf, command(environment, "generate_invoice.rb", "--reproduce", "August 2026").strip
+      assert_equal saved, JSON.parse(File.read(File.join(target, "invoice.json"))).fetch("snapshot")
       assert_equal original_config, File.binread(config_path)
       if ENV["INVOICE_TEST_ARTIFACT_DIR"]
         destination = File.expand_path(ENV.fetch("INVOICE_TEST_ARTIFACT_DIR"))

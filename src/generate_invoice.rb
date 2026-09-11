@@ -2,6 +2,7 @@ require "json"
 require "fileutils"
 require "open3"
 require "tmpdir"
+require "time"
 require_relative "app_paths"
 require_relative "invoice_calculation"
 require_relative "document_locale"
@@ -92,24 +93,111 @@ module InvoiceGenerator
     end
   end
 
-  def generate(month_label)
+  def decimal_string(value)
+    InvoiceCalculation.decimal_value(value, "snapshot value").to_s("F")
+  end
+
+  def build_snapshot(config, record, period_start, period_end, invoice_date, calc, context)
+    tax = calc["taxEnabled"] ? InvoiceCalculation.tax_profile(config) : {}
+    treatment = config.fetch("reimbursements", {}).fetch("gstTreatment", "excludedFromTaxableValue")
+    snapshot = {
+      "version" => 1, "generatedAt" => Time.now.utc.iso8601(6),
+      "invoiceNo" => record.fetch("invoiceNo"), "invoiceDate" => invoice_date.iso8601,
+      "periodStart" => period_start.iso8601, "periodEnd" => period_end.iso8601,
+      "currency" => "INR", "locale" => DocumentLocale.from_config(config),
+      "supplier" => config.fetch("from").select { |key, _| %w[name address email phone gst].include?(key) },
+      "customer" => config.fetch("client").select { |key, _| %w[name address email phone gst].include?(key) },
+      "bank" => config["bank"]&.select { |key, _| %w[name holder account ifsc].include?(key) },
+      "service" => {
+        "description" => context["items"][0]["description"], "detail" => context["items"][0]["detail"],
+        "sacCode" => tax["gstSacCode"], "sacDescription" => tax["gstSacDescription"],
+        "hours" => decimal_string(calc["hours"]), "rateUsd" => decimal_string(config["rateUsd"]),
+        "exchangeRate" => decimal_string(config["exchRate"]), "rateInr" => decimal_string(calc["rateInr"]),
+        "amount" => decimal_string(calc["serviceAmount"])
+      },
+      "gst" => {
+        "enabled" => calc["taxEnabled"], "treatment" => calc["treatment"],
+        "placeOfSupply" => %w[intraState interState].include?(calc["treatment"]) ? config.dig("client", "gst", "stateCode") : nil,
+        "reverseCharge" => tax.fetch("gstReverseCharge", false),
+        "ratePercent" => tax["gstRatePercent"] && decimal_string(tax["gstRatePercent"]),
+        "taxes" => calc["taxes"].map { |name, rate, amount| { "name" => name, "ratePercent" => decimal_string(rate), "amount" => decimal_string(amount) } }
+      },
+      "reimbursements" => calc["reimbursements"].each_with_index.map do |item, index|
+        { "name" => item["name"], "amount" => decimal_string(item["amount"]),
+          "gstTreatment" => treatment, "attachment" => record.fetch("reimbursements", [])[index]["attachment"] }
+      end,
+      "totals" => %w[serviceAmount subtotal taxableValue excludedReimbursements taxTotal grandTotal].to_h { |key| [key, decimal_string(calc[key])] }
+    }
+    JSON.parse(JSON.generate(snapshot))
+  end
+
+  def snapshot_context(snapshot)
+    locale = snapshot.fetch("locale")
+    service, gst, totals = snapshot.values_at("service", "gst", "totals")
+    items = [{
+      "description" => service.fetch("description"), "detail" => service.fetch("detail"),
+      "sacCode" => service["sacCode"], "sacDescription" => service["sacDescription"]&.strip,
+      "quantity" => DocumentLocale.quantity(service.fetch("hours"), locale),
+      "amount" => DocumentLocale.money(service.fetch("amount"), locale)
+    }]
+    items.concat(snapshot.fetch("reimbursements").map do |item|
+      { "description" => "Reimbursement - #{item.fetch('name')}", "detail" => "",
+        "sacCode" => nil, "sacDescription" => nil, "quantity" => "-",
+        "amount" => DocumentLocale.money(item.fetch("amount"), locale) }
+    end)
+    {
+      "title" => "INVOICE", "supplier" => snapshot.fetch("supplier"), "client" => snapshot.fetch("customer"),
+      "invoice" => {
+        "number" => snapshot.fetch("invoiceNo"), "date" => DocumentLocale.date(Date.iso8601(snapshot.fetch("invoiceDate")), locale),
+        "period" => "#{DocumentLocale.date(Date.iso8601(snapshot.fetch('periodStart')), locale)} - #{DocumentLocale.date(Date.iso8601(snapshot.fetch('periodEnd')), locale)}"
+      },
+      "items" => items,
+      "tax" => { "enabled" => gst.fetch("enabled"), "rows" => gst.fetch("taxes").map do |tax|
+        { "name" => tax.fetch("name"), "rate" => DocumentLocale.quantity(tax.fetch("ratePercent"), locale),
+          "amount" => DocumentLocale.money(tax.fetch("amount"), locale) }
+      end },
+      "totals" => { "taxableValue" => DocumentLocale.money(totals.fetch("taxableValue"), locale), "grandTotal" => DocumentLocale.money(totals.fetch("grandTotal"), locale) },
+      "rates" => { "usd" => DocumentLocale.quantity(service.fetch("rateUsd"), locale), "exchange" => DocumentLocale.money(service.fetch("exchangeRate"), locale) },
+      "bank" => snapshot["bank"]
+    }
+  rescue KeyError, NoMethodError, ArgumentError => error
+    raise ConfigError, "Invalid invoice snapshot: #{error.message}"
+  end
+
+  def generate(month_label, reproduce: false)
     config = JSON.parse(File.read(active_config_path))
-    record = TimeLog.invoice_data(month_label, config)
-    InvoiceCalculation.field(record, "invoiceNo", String)
-    period_start, period_end, invoice_date = InvoiceCalculation.parse_month(month_label)
-    calc = calculate_invoice(config, record, period_start)
-    output_dir = TimeLog.output_dir(config, record, month_label)
-    FileUtils.mkdir_p(output_dir)
+    store = InvoiceStore.new(config)
+    record = store.find(month_label)
+    if reproduce
+      snapshot = record && record["snapshot"]
+      unless snapshot.is_a?(Hash) && snapshot["version"] == 1
+        raise ConfigError, "No supported snapshot exists for #{month_label}; older invoices are not backfilled"
+      end
+    else
+      record = TimeLog.invoice_data(month_label, config)
+      period_start, period_end, invoice_date = InvoiceCalculation.parse_month(month_label)
+      calc = calculate_invoice(config, record, period_start)
+      context = build_template_context(config, record, period_start, period_end, invoice_date, calc)
+      snapshot = build_snapshot(config, record, period_start, period_end, invoice_date, calc, context)
+    end
+    snapshot = snapshot.reject { |key, _| key == "renderContext" }
+    output_dir = store.directory(record)
     output_path = File.join(output_dir, "#{record['invoiceNo']} Invoice - #{month_label}.pdf")
-    render_invoice(build_template_context(config, record, period_start, period_end, invoice_date, calc), output_path)
+    Dir.mktmpdir("invoice-publish-", output_dir) do |directory|
+      rendered = File.join(directory, "invoice.pdf")
+      render_invoice(snapshot_context(snapshot), rendered)
+      store.save_generation(month_label, snapshot, rendered, output_path, reproduce: reproduce)
+    end
     output_path
   end
+
 end
 
 if $PROGRAM_NAME == __FILE__
-  abort('Usage: ruby src/generate_invoice.rb "August 2026"') if ARGV.empty?
+  reproduce = !!ARGV.delete("--reproduce")
+  abort('Usage: ruby src/generate_invoice.rb [--reproduce] "August 2026"') if ARGV.empty?
   begin
-    puts InvoiceGenerator.generate(ARGV.join(" "))
+    puts InvoiceGenerator.generate(ARGV.join(" "), reproduce: reproduce)
   rescue InvoiceGenerator::ConfigError, SystemCallError, JSON::ParserError, RuntimeError => error
     warn "Invoice generation failed: #{error.message}"
     exit 1
