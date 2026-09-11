@@ -5,6 +5,7 @@ require "tmpdir"
 require_relative "app_paths"
 require_relative "invoice_calculation"
 require_relative "document_locale"
+require_relative "time_log"
 
 module InvoiceGenerator
   ConfigError = InvoiceCalculation::ConfigError
@@ -93,13 +94,11 @@ module InvoiceGenerator
 
   def generate(month_label)
     config = JSON.parse(File.read(active_config_path))
-    matches = config.fetch("invoices", []).select { |record| record["month"] == month_label }
-    raise ConfigError, "Expected exactly one invoice record for #{month_label}" unless matches.length == 1
-    record = matches.first
+    record = TimeLog.invoice_data(month_label, config)
     InvoiceCalculation.field(record, "invoiceNo", String)
     period_start, period_end, invoice_date = InvoiceCalculation.parse_month(month_label)
     calc = calculate_invoice(config, record, period_start)
-    output_dir = File.join(InvoiceCalculation.field(config, "outputDir", String), "#{record['invoiceNo']} #{month_label}")
+    output_dir = TimeLog.output_dir(config, record, month_label)
     FileUtils.mkdir_p(output_dir)
     output_path = File.join(output_dir, "#{record['invoiceNo']} Invoice - #{month_label}.pdf")
     render_invoice(build_template_context(config, record, period_start, period_end, invoice_date, calc), output_path)

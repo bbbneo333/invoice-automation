@@ -58,16 +58,5 @@
     "account": "000000000000",
     "ifsc": "EXAMPLE0001"
   },
-  "outputDir": "/absolute/path/to/generated-invoices",
-  "invoices": [
-    {
-      "month": "January 2026",
-      "invoiceNo": "001",
-      "hours": 0,
-      "amount": 0,
-      "reimbursements": [
-
-      ]
-    }
-  ]
+  "outputDir": "/absolute/path/to/generated-invoices"
 }

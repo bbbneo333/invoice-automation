@@ -27,10 +27,12 @@ class GenerationIntegrationTest < Minitest::Test
       config.fetch("taxProfile").delete("sacDescription")
       config["taxProfile"] = InvoiceCalculation.tax_profile(config)
       config["outputDir"] = File.join(directory, "exports & spaces")
-      config["invoices"] = []
+      config.delete("invoices")
       config["jira"] = { "enabled" => false }
       config_path = File.join(directory, "project.json")
       File.write(config_path, JSON.generate(config))
+      original_config = File.binread(config_path)
+      File.chmod(0444, config_path)
       # Any accidental invocation of the removed Python backend must fail.
       bin = File.join(directory, "bin")
       FileUtils.mkdir_p(bin)
@@ -57,12 +59,20 @@ class GenerationIntegrationTest < Minitest::Test
         assert_equal({ "start" => "running", "pause" => "paused", "finish" => "idle" }.fetch(action), state.fetch("status"))
       end
       command(environment, "time_log.rb", "set-day", "August 2026", "2026-08-14", "manual", "", "7.5", "Work & <review>\nSecond line")
+      command(environment, "time_log.rb", "set-target", "August 2026", "160")
+      command(environment, "time_log.rb", "set-daily-target", "August 2026", "6")
       command(environment, "time_log.rb", "add-reimbursement", "August 2026", "Hosting", "998.005")
       result = JSON.parse(command(environment, "time_log.rb", "generate", "August 2026"))
       target = result.fetch("generation").fetch("output")
       assert File.directory?(target)
-      record = JSON.parse(File.read(config_path)).fetch("invoices").find { |item| item["month"] == "August 2026" }
-      assert_equal 7.5, record.fetch("hours")
+      record = JSON.parse(File.read(File.join(target, "invoice.json")))
+      refute record.key?("hours")
+      refute record.key?("amount")
+      assert_equal 160, record.fetch("targetHours")
+      assert_equal 6, record.fetch("dailyTargetHours")
+      assert_equal original_config, File.binread(config_path)
+      assert File.file?(File.join(target, "timelog.json"))
+      assert_equal 1, JSON.parse(File.read(File.join(target, "reimbursements.json"))).length
       prefix = record.fetch("invoiceNo")
       pdf = File.join(target, "#{prefix} Invoice - August 2026.pdf")
       xlsx = File.join(target, "#{prefix} Timesheet - August 2026.xlsx")
@@ -78,6 +88,7 @@ class GenerationIntegrationTest < Minitest::Test
       command(environment, "generate_timesheet.rb", "--data", File.join(__dir__, "fixtures", "timesheet_rows.json"), "--output", standalone)
       assert File.file?(standalone)
       assert_equal pdf, command(environment, "generate_invoice.rb", "August 2026").strip
+      assert_equal original_config, File.binread(config_path)
       if ENV["INVOICE_TEST_ARTIFACT_DIR"]
         destination = File.expand_path(ENV.fetch("INVOICE_TEST_ARTIFACT_DIR"))
         FileUtils.mkdir_p(destination)

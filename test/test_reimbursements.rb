@@ -41,7 +41,7 @@ class ReimbursementTest < Minitest::Test
 
     config = TimeLog.load_config
     record = TimeLog.find_invoice_record(config, "August 2026")
-    assert_equal 900, record.fetch("amount")
+    assert_equal 900, TimeLog.invoice_data("August 2026").fetch("amount")
     copied = File.join(config.fetch("outputDir"), "#{record.fetch('invoiceNo')} August 2026", entry.fetch("attachment"))
     assert File.file?(copied)
 
@@ -71,8 +71,8 @@ class ReimbursementTest < Minitest::Test
     expected_directory = File.join(config.fetch("outputDir"), "#{record.fetch('invoiceNo')} August 2026")
     paths = TimeLog.resolve_paths("August 2026")
 
-    assert_equal File.join(expected_directory, "TimeLog_August_2026.json"), paths.fetch(:logPath)
-    assert_equal File.join(expected_directory, "TimeLog_August_2026.state.json"), paths.fetch(:statePath)
+    assert_equal File.join(expected_directory, "timelog.json"), paths.fetch(:logPath)
+    assert_equal File.join(expected_directory, "timelog.state.json"), paths.fetch(:statePath)
     assert File.file?(paths.fetch(:logPath))
   end
 end

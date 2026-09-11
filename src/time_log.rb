@@ -8,6 +8,7 @@ require "digest"
 require "securerandom"
 require_relative "app_paths"
 require_relative "invoice_calculation"
+require_relative "invoice_store"
 
 module TimeLog
   REGISTRY_PATH = AppPaths.registry_path
@@ -61,10 +62,6 @@ module TimeLog
 
   def load_config
     JSON.parse(File.read(active_config_path))
-  end
-
-  def write_config(config)
-    File.write(active_config_path, JSON.pretty_generate(config) + "\n")
   end
 
   def project_status(registry = load_registry)
@@ -173,53 +170,27 @@ module TimeLog
   end
 
   def invoice_records(config)
-    config.fetch("invoices", [])
-  end
-
-  def ensure_invoice_records!(config)
-    config["invoices"] ||= invoice_records(config)
-    config["invoices"]
-  end
-
-  def next_invoice_no(config)
-    last_number = invoice_records(config)
-      .map { |record| record["invoiceNo"].to_s.to_i }
-      .max || 0
-
-    format("%03d", last_number + 1)
+    InvoiceStore.new(config).records
   end
 
   def find_invoice_record(config, month_label)
-    invoice_records(config).find { |record| record["month"] == month_label }
+    InvoiceStore.new(config).find(month_label)
   end
 
   def find_or_create_invoice_record(config, month_label)
-    records = ensure_invoice_records!(config)
-    record = records.find { |item| item["month"] == month_label }
-    return record if record
-
-    record = {
-      "month" => month_label,
-      "invoiceNo" => next_invoice_no(config),
-      "reimbursements" => [],
-      "hours" => 0,
-      "amount" => 0
-    }
-    records << record
-    write_config(config)
-    record
+    InvoiceStore.new(config).find_or_create(month_label)
   end
 
   def output_dir(config, record, month_label)
-    File.join(config.fetch("outputDir"), "#{record.fetch("invoiceNo")} #{month_label}")
+    InvoiceStore.new(config).directory(record)
   end
 
   def log_file_path(config, record, month_label)
-    File.join(output_dir(config, record, month_label), "TimeLog_#{month_label.tr(' ', '_')}.json")
+    File.join(output_dir(config, record, month_label), "timelog.json")
   end
 
   def state_file_path(config, record, month_label)
-    File.join(output_dir(config, record, month_label), "TimeLog_#{month_label.tr(' ', '_')}.state.json")
+    File.join(output_dir(config, record, month_label), "timelog.state.json")
   end
 
   def paths_for_record(config, record, month_label, init_log: true)
@@ -265,7 +236,7 @@ module TimeLog
   end
 
   def write_state(path, state)
-    File.write(path, JSON.pretty_generate(state) + "\n")
+    InvoiceStore.write_json(path, state)
   end
 
   def seconds_between(started_at, ended_at)
@@ -473,7 +444,7 @@ module TimeLog
   def ensure_monthly_log!(path, month_label)
     return if File.exist?(path)
 
-    File.write(path, JSON.pretty_generate(blank_monthly_log(month_label)) + "\n")
+    InvoiceStore.write_json(path, blank_monthly_log(month_label))
   end
 
   def read_monthly_log(path, month_label)
@@ -483,13 +454,13 @@ module TimeLog
     payload["days"] ||= []
     before = JSON.generate(payload)
     payload.fetch("days").each { |day| normalize_day!(day) }
-    File.write(path, JSON.pretty_generate(payload) + "\n") if JSON.generate(payload) != before
+    InvoiceStore.write_json(path, payload) if JSON.generate(payload) != before
     payload
   end
 
   def write_monthly_log(path, payload)
     payload["days"] = payload.fetch("days", []).sort_by { |day| day.fetch("date") }
-    File.write(path, JSON.pretty_generate(payload) + "\n")
+    InvoiceStore.write_json(path, payload)
   end
 
   def timer_hours(day)
@@ -602,8 +573,7 @@ module TimeLog
     raise "Target hours cannot be negative" if value.negative?
 
     paths = resolve_paths(month_label)
-    paths[:record]["targetHours"] = value.round(2)
-    write_config(paths[:config])
+    InvoiceStore.new(paths[:config]).update_metadata(month_label, "targetHours" => value.round(2))
     dailyHours(month_label)
   end
 
@@ -612,8 +582,7 @@ module TimeLog
     raise "Daily target hours cannot be negative" if value.negative?
 
     paths = resolve_paths(month_label)
-    paths[:record]["dailyTargetHours"] = value.round(2)
-    write_config(paths[:config])
+    InvoiceStore.new(paths[:config]).update_metadata(month_label, "dailyTargetHours" => value.round(2))
     dailyHours(month_label)
   end
 
@@ -707,89 +676,82 @@ module TimeLog
     raise "Reimbursement name must not be empty" if clean_name.empty?
     value = decimal_money(amount)
     raise "Reimbursement amount must be greater than zero" unless value.positive?
-
     config = load_config
-    record = find_or_create_invoice_record(config, month_label)
-    entry = {
-      "id" => SecureRandom.uuid,
-      "name" => clean_name,
-      "amount" => value.to_f
-    }
-
+    store = InvoiceStore.new(config)
+    store.find_or_create(month_label)
+    hours = calculateMonthlyBilledHours(month_label)
+    entry = { "id" => SecureRandom.uuid, "name" => clean_name, "amount" => value.to_f }
     source = attachment_path.to_s.strip
     target = nil
-    unless source.empty?
-      raise "Attachment does not exist: #{source}" unless File.file?(source)
-      directory = File.join(output_dir(config, record, month_label), "reimbursements")
-      target = File.join(directory, File.basename(source))
-      raise "A reimbursement attachment named #{File.basename(source)} already exists" if File.exist?(target)
-      entry["attachment"] = File.join("reimbursements", File.basename(source))
+    copied = false
+    begin
+      store.update_reimbursements(month_label) do |entries, record|
+        unless source.empty?
+          raise "Attachment does not exist: #{source}" unless File.file?(source)
+          target = File.join(store.directory(record), "reimbursements", File.basename(source))
+          raise "A reimbursement attachment named #{File.basename(source)} already exists" if File.exist?(target)
+          entry["attachment"] = File.join("reimbursements", File.basename(source))
+        end
+        updated = entries + [entry]
+        calculated_invoice_amount(config, record.merge("reimbursements" => updated), month_label, hours)
+        if target
+          FileUtils.mkdir_p(File.dirname(target))
+          FileUtils.cp(source, target)
+          copied = true
+        end
+        updated
+      end
+    rescue StandardError
+      File.delete(target) if copied && File.file?(target)
+      raise
     end
-
-    updated = record.fetch("reimbursements", []) + [entry]
-    trial_record = record.merge("reimbursements" => updated)
-    hours = calculateMonthlyBilledHours(month_label)
-    total = calculated_invoice_amount(config, trial_record, month_label, hours)
-
-    if target
-      FileUtils.mkdir_p(File.dirname(target))
-      FileUtils.cp(source, target)
-    end
-    record["reimbursements"] = updated
-    record["hours"] = hours
-    record["amount"] = total.frac.zero? ? total.to_i : total.to_f
-    write_config(config)
     reimbursementEntries(month_label)
   end
 
   def removeReimbursement(month_label, id)
     config = load_config
-    record = find_invoice_record(config, month_label)
-    raise "No invoice record for #{month_label}" unless record
-    entries = record.fetch("reimbursements", [])
-    index = entries.index { |item| item["id"] == id }
-    raise "Unknown reimbursement: #{id}" unless index
-
-    removed = entries[index]
-    updated = entries.each_with_index.reject { |_, item_index| item_index == index }.map(&:first)
-    trial_record = record.merge("reimbursements" => updated)
+    store = InvoiceStore.new(config)
     hours = calculateMonthlyBilledHours(month_label)
-    total = calculated_invoice_amount(config, trial_record, month_label, hours)
-    record["reimbursements"] = updated
-    record["hours"] = hours
-    record["amount"] = total.frac.zero? ? total.to_i : total.to_f
-    write_config(config)
-
+    removed = nil
+    record = nil
+    store.update_reimbursements(month_label) do |entries, metadata|
+      record = metadata
+      removed = entries.find { |item| item["id"] == id }
+      raise "Unknown reimbursement: #{id}" unless removed
+      updated = entries.reject { |item| item["id"] == id }
+      calculated_invoice_amount(config, record.merge("reimbursements" => updated), month_label, hours)
+      updated
+    end
     if removed["attachment"]
-      reimbursements_dir = File.expand_path(File.join(output_dir(config, record, month_label), "reimbursements"))
-      path = File.expand_path(File.join(output_dir(config, record, month_label), removed["attachment"]))
+      directory = store.directory(record)
+      reimbursements_dir = File.expand_path(File.join(directory, "reimbursements"))
+      path = File.expand_path(File.join(directory, removed["attachment"]))
       File.delete(path) if path.start_with?("#{reimbursements_dir}#{File::SEPARATOR}") && File.file?(path)
     end
     reimbursementEntries(month_label)
   end
 
-  def syncMonthlyHoursToConfig(month_label = currentMonthLabel)
-    paths = resolve_paths(month_label)
+  def invoice_data(month_label, config = load_config)
+    record = find_or_create_invoice_record(config, month_label)
+    hours = calculateMonthlyBilledHours(month_label)
+    total = calculated_invoice_amount(config, record, month_label, hours)
+    record.merge("hours" => hours, "amount" => total.frac.zero? ? total.to_i : total.to_f)
+  end
 
-    config = paths[:config]
-    record = paths[:record]
-    total_hours = calculateMonthlyBilledHours(month_label)
-
-    record["hours"] = total_hours
-    total = calculated_invoice_amount(config, record, month_label, total_hours)
-    record["amount"] = total.frac.zero? ? total.to_i : total.to_f
-    write_config(config)
-
+  def monthlySummary(month_label = currentMonthLabel)
+    config = load_config
+    record = invoice_data(month_label, config)
     {
       "month" => month_label,
       "synced" => true,
       "hours" => record["hours"],
       "billedHours" => record["hours"],
       "amount" => record["amount"],
-      "logPath" => paths[:logPath],
-      "outputDir" => paths[:outputDir]
+      "logPath" => log_file_path(config, record, month_label),
+      "outputDir" => output_dir(config, record, month_label)
     }
   end
+
 end
 
 if $PROGRAM_NAME == __FILE__
@@ -811,6 +773,8 @@ if $PROGRAM_NAME == __FILE__
       TimeLog.statusLog(month_label)
     when "projects"
       { "projects" => TimeLog.project_status }
+    when "migrate-storage"
+      InvoiceStore.migrate_config(TimeLog.active_config_path)
     when "storage-paths"
       TimeLog.storagePaths
     when "reimbursements"
@@ -894,7 +858,7 @@ if $PROGRAM_NAME == __FILE__
         "billedHours" => TimeLog.calculateMonthlyBilledHours(month_label)
       }
     when "sync"
-      TimeLog.syncMonthlyHoursToConfig(month_label)
+      TimeLog.monthlySummary(month_label)
     else
       abort("Unknown time log command: #{command}")
     end

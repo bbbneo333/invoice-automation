@@ -11,7 +11,8 @@ ruby src/time_log.rb status
 
 from `Contents/Resources/Backend` in a packaged app. Development runs fall back
 to the checkout or `INVOICE_AUTOMATION_HOME`. Ruby owns the active project, current month,
-invoice folder bootstrap, time-log file format, and config sync.
+invoice folder bootstrap, time-log file format, and invoice totals. Project
+config is read-only during normal use; mutable records live under `outputDir`.
 
 The project registry lives under macOS Application Support. Each registry entry
 retains the selected external project `configPath`. `Open Config JSON` opens the

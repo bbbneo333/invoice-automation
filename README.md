@@ -112,7 +112,9 @@ Unicode table used to estimate wrapped row heights.
 Mutable application data is not stored in the source checkout. On macOS:
 
 - project registry: `~/Library/Application Support/InvoiceTimer/config.json`
-- project configs: remain at the user-selected `configPath`
+- project configs: read-only settings at the user-selected `configPath`
+- invoice numbering: `sequence.json` under the project's `outputDir`
+- invoice metadata and reimbursements: JSON files in each invoice-month directory
 - timer logs and open-session state: the corresponding invoice-month directory under `outputDir`
 - optional Jira snapshots: `~/Library/Caches/InvoiceTimer/projects/<key>/jira/`
 - diagnostics: `~/Library/Logs/InvoiceTimer/`
@@ -127,18 +129,64 @@ project config's `outputDir` determines where invoice-month folders, time logs,
 PDFs, timesheets, and reimbursement attachments are stored. See
 `config.example.json` and `project-config.example.json` for the supported shapes.
 
-Each invoice month is self-contained under the configured output directory:
+Use a separate `outputDir` for each project. Each invoice month is self-contained
+under that directory:
 
 ```text
-<outputDir>/<invoiceNo> <Month>/
-  TimeLog_<Month>_<Year>.json
-  TimeLog_<Month>_<Year>.state.json   # only while a session is unfinished
-  <invoiceNo> Invoice - <Month>.pdf
-  <invoiceNo> Timesheet - <Month>.xlsx
-  reimbursements/
+<outputDir>/
+  sequence.json
+  .sequence.lock
+  001 September 2026/
+    invoice.json
+    timelog.json
+    timelog.state.json             # only while a session is unfinished
+    reimbursements.json
+    reimbursements/
+    001 Invoice - September 2026.pdf
+    001 Timesheet - September 2026.xlsx
 ```
 
-Invoice generation reads the monthly time log directly from this directory.
+`sequence.json` contains `nextInvoiceNo` (an integer starting at 1) and an internal
+`legacyImported` flag. Number allocation uses a file lock and atomic JSON writes.
+An existing month's number is reused; a new month gets the next number regardless
+of calendar order. Existing numbered folders prevent an interrupted allocation
+or a stale counter from reusing a number. Keep the sequence file when backing up
+or moving the output directory, and do not lower its counter.
+
+`invoice.json` contains `month`, `invoiceNo`, and optional monthly `targetHours`
+and `dailyTargetHours` overrides. `reimbursements.json` is an array of entries
+with `id`, `name`, `amount`, and an optional relative `attachment` path. Hours and
+invoice amounts are calculated from `timelog.json`, reimbursement entries, and
+project settings; they are not duplicated in invoice metadata or config.
+
+Normal timer actions, target edits, reimbursements, and generation never write
+the project config. The application registry still stores the active project
+selection. The `sync` CLI command is retained for compatibility, but now only
+returns recalculated hours and totals; it does not update config.
+
+### Migrating existing projects
+
+On first access to an output directory, existing `config.invoices` entries are
+imported into monthly files. Their numbers, folder names, target overrides, and
+reimbursements are retained. `TimeLog_<Month>_<Year>.json` and its `.state.json`
+counterpart are renamed to `timelog.json` and `timelog.state.json`. Receipts and
+existing PDFs/XLSX files stay in place. Conflicting files or duplicate invoice
+numbers stop migration rather than overwrite data. After import, the legacy
+config entries are ignored, so deleted reimbursements cannot reappear.
+
+To also remove the legacy `invoices` property from the active project's config,
+quit the old app and run this once from the repository root:
+
+```sh
+ruby src/time_log.rb migrate-storage
+```
+
+This explicitly requested command imports data if necessary, saves the original
+config under `<outputDir>/.migration/`, and removes only the `invoices` property.
+It can be rerun safely and prints the backup path when it edits config. Repeat
+for each project after selecting it. Ordinary app operations never perform this
+config cleanup themselves. Start the rebuilt app after migration; older versions
+expect the previous time-log filenames and config storage.
 
 ## Document locale
 
@@ -241,7 +289,7 @@ An optional description can be added inside `taxProfile`:
 
 `reimbursements.gstTreatment` separately controls whether reimbursements enter
 the taxable value; see [Reimbursements](#reimbursements). After editing tax
-settings, generate the invoice package again to recalculate its recorded total
+settings, generate the invoice package again to recalculate its total
 and PDF. The [complete example](project-config.example.json) shows the settings
 in context. These examples are JSON fragments to place inside the project
 config, not the project registry.
@@ -329,7 +377,8 @@ The attachment is copied without parsing or modification to:
 Duplicate destination filenames are rejected. The app does not scan folders,
 extract invoice data, infer amounts, or reconcile files with config. Removing an
 entry also removes its copied attachment after confirmation. Reimbursement
-changes recalculate the configured invoice amount immediately.
+entries are stored in that month's `reimbursements.json`; totals are calculated
+from these entries when requested or generated.
 
 Build products, dependencies, caches, and editor metadata are ignored. Before
 every release, review staged files with:
@@ -346,6 +395,7 @@ ruby test/test_generate_invoice.rb
 ruby test/test_document_locale.rb
 ruby test/test_generate_timesheet.rb
 ruby test/test_reimbursements.rb
+ruby test/test_invoice_store.rb
 ruby test/test_jira_support.rb
 ruby -c src/time_log.rb
 ruby -c src/generate_month.rb
@@ -368,9 +418,12 @@ The integration test uses synthetic project data and temporary storage. For the
 packaged backend it clears installed-gem paths and blocks Python commands,
 then exercises timer actions, monthly generation, and both standalone document
 commands. Migration baselines in `test/fixtures` preserve the original invoice
-results and spreadsheet XML. Invoice totals are shared between config sync,
+results and spreadsheet XML. Invoice totals are shared between summaries,
 reimbursements, and document generation; document-specific validation remains
 required when rendering an invoice.
+
+Storage tests cover legacy migration, read-only configs, unfinished timers,
+duplicate/conflicting data, interrupted allocation, and concurrent numbering.
 
 ## License
 

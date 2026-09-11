@@ -10,7 +10,7 @@ def load_config
 end
 
 def output_dir(config, record, month_label)
-  File.join(config.fetch("outputDir"), "#{record.fetch("invoiceNo")} #{month_label}")
+  TimeLog.output_dir(config, record, month_label)
 end
 
 def timesheet_payload(config, month_label, jira_issues = [])
@@ -56,7 +56,7 @@ def main(arguments)
   target_dir = output_dir(config, record, month_label)
   FileUtils.mkdir_p(target_dir)
 
-  sync = TimeLog.syncMonthlyHoursToConfig(month_label)
+  sync = TimeLog.monthlySummary(month_label)
   config = load_config
   record = TimeLog.find_or_create_invoice_record(config, month_label)
 
@@ -66,7 +66,7 @@ def main(arguments)
   InvoiceGenerator.generate(month_label)
 
   puts target_dir
-  warn "Synced #{sync['hours']} billed hours from #{sync['logPath']}"
+  warn "Calculated #{sync['hours']} billed hours from #{sync['logPath']}"
 rescue StandardError => e
   path = TimeLog.log_error("generate_month.rb", e, "month" => arguments.join(" "))
   warn "#{e.message}\nDetails: #{path}"
