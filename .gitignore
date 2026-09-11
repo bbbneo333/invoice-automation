@@ -5,6 +5,8 @@
 
 # Language/package build output
 node_modules/
+vendor/
+.bundle/
 __pycache__/
 *.py[cod]
 .pytest_cache/

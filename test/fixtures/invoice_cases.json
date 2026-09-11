@@ -1,0 +1,3028 @@
+[
+  {
+    "name": "intraState/False/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "intraState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "427097.33",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "intraState",
+      "taxes": [
+        [
+          "CGST",
+          "9",
+          "32575.22"
+        ],
+        [
+          "SGST",
+          "9",
+          "32575.22"
+        ]
+      ],
+      "taxTotal": "65150.44",
+      "grandTotal": "427097.33"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": [
+          {
+            "name": "CGST",
+            "rate": "9",
+            "amount": "32,575.22"
+          },
+          {
+            "name": "SGST",
+            "rate": "9",
+            "amount": "32,575.22"
+          }
+        ]
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "4,27,097.33"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "intraState/False/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "intraState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "426917.69",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "intraState",
+      "taxes": [
+        [
+          "CGST",
+          "9",
+          "32485.4"
+        ],
+        [
+          "SGST",
+          "9",
+          "32485.4"
+        ]
+      ],
+      "taxTotal": "64970.8",
+      "grandTotal": "426917.69"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": [
+          {
+            "name": "CGST",
+            "rate": "9",
+            "amount": "32,485.40"
+          },
+          {
+            "name": "SGST",
+            "rate": "9",
+            "amount": "32,485.40"
+          }
+        ]
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "4,26,917.69"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "intraState/True/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "intraState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "intraState",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "intraState/True/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "intraState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "intraState",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "interState/False/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "interState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "427097.33",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "interState",
+      "taxes": [
+        [
+          "IGST",
+          "18",
+          "65150.44"
+        ]
+      ],
+      "taxTotal": "65150.44",
+      "grandTotal": "427097.33"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": [
+          {
+            "name": "IGST",
+            "rate": "18",
+            "amount": "65,150.44"
+          }
+        ]
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "4,27,097.33"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "interState/False/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "interState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "426917.69",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "interState",
+      "taxes": [
+        [
+          "IGST",
+          "18",
+          "64970.8"
+        ]
+      ],
+      "taxTotal": "64970.8",
+      "grandTotal": "426917.69"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": [
+          {
+            "name": "IGST",
+            "rate": "18",
+            "amount": "64,970.80"
+          }
+        ]
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "4,26,917.69"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "interState/True/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "interState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "interState",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "interState/True/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "interState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "interState",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "29BBBBB0000B1Z4",
+          "state": "Karnataka",
+          "stateCode": "29"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithPayment/False/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "exportWithPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "427097.33",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "exportWithPayment",
+      "taxes": [
+        [
+          "IGST",
+          "18",
+          "65150.44"
+        ]
+      ],
+      "taxTotal": "65150.44",
+      "grandTotal": "427097.33"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": [
+          {
+            "name": "IGST",
+            "rate": "18",
+            "amount": "65,150.44"
+          }
+        ]
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "4,27,097.33"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithPayment/False/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "exportWithPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "426917.69",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "exportWithPayment",
+      "taxes": [
+        [
+          "IGST",
+          "18",
+          "64970.8"
+        ]
+      ],
+      "taxTotal": "64970.8",
+      "grandTotal": "426917.69"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": [
+          {
+            "name": "IGST",
+            "rate": "18",
+            "amount": "64,970.80"
+          }
+        ]
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "4,26,917.69"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithPayment/True/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "exportWithPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "exportWithPayment",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithPayment/True/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "exportWithPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "exportWithPayment",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithoutPayment/False/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "exportWithoutPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "exportWithoutPayment",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithoutPayment/False/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "exportWithoutPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "exportWithoutPayment",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithoutPayment/True/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "exportWithoutPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "exportWithoutPayment",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exportWithoutPayment/True/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "exportWithoutPayment"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "exportWithoutPayment",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exempt/False/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "exempt"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "exempt",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exempt/False/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "exempt"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "exempt",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exempt/True/includedInTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "includedInTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "exempt"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "361946.89",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "exempt",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,61,946.89",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "exempt/True/excludedFromTaxableValue",
+    "config": {
+      "rateUsd": "25.015",
+      "exchRate": "91.005",
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": true,
+        "defaultTreatment": "exempt"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": "158.555",
+      "amount": "361946.89",
+      "reimbursements": [
+        {
+          "name": " Hosting & tools ",
+          "amount": "998.005"
+        }
+      ]
+    },
+    "calculation": {
+      "hours": "158.555",
+      "rateInr": "2276.49",
+      "serviceAmount": "360948.88",
+      "reimbursements": [
+        {
+          "name": "Hosting & tools",
+          "amount": "998.01"
+        }
+      ],
+      "subtotal": "361946.89",
+      "taxableValue": "360948.88",
+      "excludedReimbursements": "998.01",
+      "taxEnabled": true,
+      "treatment": "exempt",
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "361946.89"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "158.555",
+          "amount": "3,60,948.88"
+        },
+        {
+          "description": "Reimbursement - Hosting & tools",
+          "detail": "",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "-",
+          "amount": "998.01"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,60,948.88",
+        "grandTotal": "3,61,946.89"
+      },
+      "rates": {
+        "usd": "25.015",
+        "exchange": "91.01"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "July 2026",
+    "config": {
+      "rateUsd": 25,
+      "exchRate": 91,
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "intraState"
+      }
+    },
+    "record": {
+      "month": "July 2026",
+      "invoiceNo": "007",
+      "hours": 160,
+      "amount": 364000,
+      "reimbursements": []
+    },
+    "calculation": {
+      "hours": "160",
+      "rateInr": "2275",
+      "serviceAmount": "364000",
+      "reimbursements": [],
+      "subtotal": "364000",
+      "taxableValue": "364000",
+      "excludedReimbursements": "0",
+      "taxEnabled": false,
+      "treatment": null,
+      "taxes": [],
+      "taxTotal": "0",
+      "grandTotal": "364000"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Aug 2026",
+        "period": "01 Jul 2026 - 31 Jul 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": null,
+          "sacDescription": null,
+          "quantity": "160",
+          "amount": "3,64,000.00"
+        }
+      ],
+      "tax": {
+        "enabled": false,
+        "rows": []
+      },
+      "totals": {
+        "taxableValue": "3,64,000.00",
+        "grandTotal": "3,64,000.00"
+      },
+      "rates": {
+        "usd": "25",
+        "exchange": "91.00"
+      },
+      "bank": null
+    }
+  },
+  {
+    "name": "August 2026",
+    "config": {
+      "rateUsd": 25,
+      "exchRate": 91,
+      "reimbursements": {
+        "gstTreatment": "excludedFromTaxableValue"
+      },
+      "from": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "taxProfile": {
+        "enabled": true,
+        "effectiveFrom": "2026-08-01",
+        "sacCode": "998314",
+        "sacDescription": "Information technology design and development services",
+        "ratePercent": 18,
+        "amountsIncludeTax": false,
+        "reverseCharge": false,
+        "defaultTreatment": "intraState"
+      }
+    },
+    "record": {
+      "month": "August 2026",
+      "invoiceNo": "007",
+      "hours": 0,
+      "amount": 0,
+      "reimbursements": []
+    },
+    "calculation": {
+      "hours": "0",
+      "rateInr": "2275",
+      "serviceAmount": "0",
+      "reimbursements": [],
+      "subtotal": "0",
+      "taxableValue": "0",
+      "excludedReimbursements": "0",
+      "taxEnabled": true,
+      "treatment": "intraState",
+      "taxes": [
+        [
+          "CGST",
+          "9",
+          "0"
+        ],
+        [
+          "SGST",
+          "9",
+          "0"
+        ]
+      ],
+      "taxTotal": "0",
+      "grandTotal": "0"
+    },
+    "context": {
+      "title": "INVOICE",
+      "supplier": {
+        "name": "Supplier",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08AAAAA0000A1Z5",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "client": {
+        "name": "Customer",
+        "address": "Jaipur",
+        "email": "",
+        "phone": "",
+        "gst": {
+          "gstin": "08BBBBB0000B1Z4",
+          "state": "Rajasthan",
+          "stateCode": "08"
+        }
+      },
+      "invoice": {
+        "number": "007",
+        "date": "01 Sep 2026",
+        "period": "01 Aug 2026 - 31 Aug 2026"
+      },
+      "items": [
+        {
+          "description": "Development & Implementation",
+          "detail": "Refer to attached timesheet for work log and hours",
+          "sacCode": "998314",
+          "sacDescription": "Information technology design and development services",
+          "quantity": "0",
+          "amount": "0.00"
+        }
+      ],
+      "tax": {
+        "enabled": true,
+        "rows": [
+          {
+            "name": "CGST",
+            "rate": "9",
+            "amount": "0.00"
+          },
+          {
+            "name": "SGST",
+            "rate": "9",
+            "amount": "0.00"
+          }
+        ]
+      },
+      "totals": {
+        "taxableValue": "0.00",
+        "grandTotal": "0.00"
+      },
+      "rates": {
+        "usd": "25",
+        "exchange": "91.00"
+      },
+      "bank": null
+    }
+  }
+]

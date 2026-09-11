@@ -11,6 +11,10 @@ fi
 
 swift build -c release
 
+# Resolve dependencies during the build. The app loads this private copy and
+# never needs Bundler or a user's installed gems at runtime.
+RUBYZIP_DIR="$(ruby -r ../src/backend_dependencies -e 'puts Gem.loaded_specs.fetch("rubyzip").full_gem_path')"
+
 APP_DIR="build/InvoiceTimer.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -23,19 +27,9 @@ mkdir -p "$MACOS_DIR" "$BACKEND_DIR/runtime/chromium"
 
 cp ".build/release/InvoiceTimer" "$MACOS_DIR/InvoiceTimer"
 
-BACKEND_FILES=(
-  app_paths.rb
-  generate_invoice.py
-  generate_month.rb
-  generate_timesheet.py
-  jira_support.rb
-  render_invoice.mjs
-  time_log.rb
-)
-
-for file in "${BACKEND_FILES[@]}"; do
-  cp "$REPOSITORY_DIR/$file" "$BACKEND_DIR/$file"
-done
+cp -R "$REPOSITORY_DIR/src" "$BACKEND_DIR/src"
+mkdir -p "$BACKEND_DIR/vendor"
+cp -R "$RUBYZIP_DIR" "$BACKEND_DIR/vendor/rubyzip"
 cp -R "$REPOSITORY_DIR/templates" "$BACKEND_DIR/templates"
 cp -R "$REPOSITORY_DIR/node_modules" "$BACKEND_DIR/node_modules"
 

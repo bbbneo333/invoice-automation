@@ -152,7 +152,7 @@ final class TimeLogClient {
         )
 
         if let directory = candidates.first(where: {
-            fileManager.fileExists(atPath: $0.appendingPathComponent("time_log.rb").path)
+            fileManager.fileExists(atPath: $0.appendingPathComponent("src/time_log.rb").path)
         }) {
             return directory.standardizedFileURL
         }
@@ -214,7 +214,7 @@ final class TimeLogClient {
     private func runData(_ command: String, _ arguments: [String] = []) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["ruby", "time_log.rb", command] + arguments
+        process.arguments = ["ruby", "src/time_log.rb", command] + arguments
         process.currentDirectoryURL = toolDirectory
 
         let stdout = Pipe()

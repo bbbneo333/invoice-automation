@@ -39,7 +39,7 @@
         <td>
           <strong>{{ item.description }}</strong>
           {% if item.detail %}<div class="detail">{{ item.detail }}</div>{% endif %}
-          {% if item.sacCode %}<div class="detail"><strong>SAC:</strong> {{ item.sacCode }} - {{ item.sacDescription }}</div>{% endif %}
+          {% if item.sacCode %}<div class="detail"><strong>SAC:</strong> {{ item.sacCode }}{% if item.sacDescription %} - {{ item.sacDescription }}{% endif %}</div>{% endif %}
         </td>
         <td>{{ item.quantity }}</td>
         <td>{{ item.amount }}</td>

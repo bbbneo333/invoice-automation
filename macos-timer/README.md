@@ -6,7 +6,7 @@ The app is a UI shell around bundled Ruby commands. On launch and after
 every action it calls:
 
 ```bash
-ruby time_log.rb status
+ruby src/time_log.rb status
 ```
 
 from `Contents/Resources/Backend` in a packaged app. Development runs fall back

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import nunjucks from "nunjucks";
 import { chromium } from "playwright";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+const here = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = process.argv.slice(2);
 const value = (name) => {
   const index = args.indexOf(name);

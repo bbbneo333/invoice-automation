@@ -1,11 +1,16 @@
 {
+  "locale": "en-IN",
   "jira": {
     "enabled": false,
     "domain": "your-company",
     "email": "you@example.com",
     "apiToken": "replace-with-a-jira-api-token",
     "assignee": "currentUser",
-    "issueTypes": ["Story", "Task", "Bug"],
+    "issueTypes": [
+      "Story",
+      "Task",
+      "Bug"
+    ],
     "inProgressStatus": "In Progress",
     "doneStatus": "Done"
   },
@@ -37,14 +42,15 @@
     }
   },
   "taxProfile": {
+    "type": "gst",
     "enabled": true,
     "effectiveFrom": "2026-01-01",
-    "sacCode": "998314",
-    "sacDescription": "Information technology consulting and support services",
-    "ratePercent": 18,
+    "gstSacCode": "998314",
+    "gstSacDescription": "Information technology consulting and support services",
+    "gstRatePercent": 18,
     "amountsIncludeTax": false,
-    "reverseCharge": false,
-    "defaultTreatment": "interState"
+    "gstReverseCharge": false,
+    "gstDefaultTreatment": "interState"
   },
   "bank": {
     "name": "Example Bank",
@@ -59,7 +65,9 @@
       "invoiceNo": "001",
       "hours": 0,
       "amount": 0,
-      "reimbursements": []
+      "reimbursements": [
+
+      ]
     }
   ]
 }

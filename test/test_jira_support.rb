@@ -1,5 +1,5 @@
 require "minitest/autorun"
-require_relative "jira_support"
+require_relative "../src/jira_support"
 
 class JiraSupportTest < Minitest::Test
   def test_missing_jira_config_is_disabled

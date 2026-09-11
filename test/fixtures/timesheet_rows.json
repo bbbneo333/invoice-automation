@@ -1,0 +1,44 @@
+{
+  "rows": [
+    {
+      "date": "2026-08-14",
+      "taskCategory": "Development",
+      "taskDescription": "Implement invoice export",
+      "ticketRef": "APP-42",
+      "hours": 7.5,
+      "billable": "Y",
+      "notes": "Client work"
+    },
+    {
+      "date": "2026-08-15",
+      "taskCategory": "Bug Fix",
+      "taskDescription": "Fix rounding & <escaping> \"quotes\"",
+      "ticketRef": "APP-43",
+      "hours": 2,
+      "billable": "Y",
+      "notes": " First line\nSecond line\n "
+    },
+    {
+      "date": "2026-08-16",
+      "taskCategory": "Development",
+      "taskDescription": "A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description A detailed description ",
+      "ticketRef": "APP-44",
+      "hours": 0.25,
+      "notes": "First line\nSecond line\nThird line"
+    },
+    {
+      "date": "2026-08-17",
+      "taskCategory": "Development",
+      "taskDescription": "日本語 全角Ａ हिंदी café 👩🏽‍💻 é ＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭiＷＭi",
+      "ticketRef": "APP-45",
+      "hours": 8,
+      "notes": "\t spaces \n\n"
+    },
+    {
+      "date": "2026-08-18",
+      "taskDescription": "Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long Long ",
+      "hours": 1,
+      "notes": ""
+    }
+  ]
+}

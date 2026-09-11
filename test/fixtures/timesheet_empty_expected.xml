@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
+  <dimension ref="A1:G2"/>
+  <sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+  <sheetFormatPr defaultRowHeight="20"/>
+  <cols>
+    <col min="1" max="1" width="13" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="44" customWidth="1"/><col min="4" max="4" width="18" customWidth="1"/><col min="5" max="5" width="11" customWidth="1"/><col min="6" max="6" width="11" customWidth="1"/><col min="7" max="7" width="36" customWidth="1"/>
+  </cols>
+  <sheetData><row r="1" ht="28" customHeight="1"><c r="A1" s="1" t="inlineStr"><is><t>Date</t></is></c><c r="B1" s="1" t="inlineStr"><is><t>Task Category</t></is></c><c r="C1" s="1" t="inlineStr"><is><t>Task Description</t></is></c><c r="D1" s="1" t="inlineStr"><is><t>Ticket/Ref</t></is></c><c r="E1" s="1" t="inlineStr"><is><t>Hours</t></is></c><c r="F1" s="1" t="inlineStr"><is><t>Billable</t></is></c><c r="G1" s="1" t="inlineStr"><is><t>Notes</t></is></c></row><row r="2" ht="24" customHeight="1"><c r="D2" s="4" t="inlineStr"><is><t>Total</t></is></c><c r="E2" s="5"><f>0</f></c></row></sheetData>
+  <autoFilter ref="A1:G1"/>
+  <pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/>
+  <pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/>
+</worksheet>

@@ -9,23 +9,40 @@ A deterministic invoice and work-time toolkit with:
 - editable HTML/CSS invoices rendered to PDF with Playwright.
 
 No LLM or hosted service is required. All calculations, state transitions, and
-document generation are implemented in the checked-in Ruby, Python, JavaScript,
-and Swift code.
+document generation are implemented in the checked-in Ruby, JavaScript, and
+Swift code. Ruby owns the backend, including invoice calculations and XLSX
+generation; Swift provides the native UI and Node/Playwright renders PDFs.
+
+## Project structure
+
+```text
+src/                  Ruby backend and Node PDF renderer
+test/                 Ruby tests
+  fixtures/           Synthetic invoice and timesheet baselines
+templates/            Invoice HTML/CSS and timesheet XML/Unicode data
+macos-timer/          Swift menu-bar app and app-bundle build script
+Gemfile, Gemfile.lock Ruby dependencies
+package.json          PDF renderer dependencies
+```
+
+Run the CLI and tests from the repository root using `ruby src/<command>.rb`
+and `ruby test/<test_name>.rb`. The app bundle keeps the same `src/` and
+`templates/` layout inside `Contents/Resources/Backend`.
 
 ## Requirements
 
 - macOS 13 or later for the menu-bar app
-- Ruby
-- Python 3
+- Ruby 2.6 or later, with Bundler for development builds
 - Node.js 20 or later (development builds only; packaged in the app bundle)
 - Swift 6 toolchain/Xcode command-line tools
 - Optional: `curl` when Jira enrichment is enabled
 
 ## Setup
 
-1. Install renderer dependencies:
+1. Install backend and renderer dependencies:
 
    ```sh
+   bundle install --path vendor/bundle
    npm install
    npm run setup:renderer
    ```
@@ -36,13 +53,13 @@ and Swift code.
 3. Register that existing config with the app, or with the CLI:
 
    ```sh
-   ruby time_log.rb add-project CLIENT /path/to/project/config.json
+   ruby src/time_log.rb add-project CLIENT /path/to/project/config.json
    ```
 
 4. Print the resolved paths:
 
    ```sh
-   ruby time_log.rb storage-paths
+   ruby src/time_log.rb storage-paths
    ```
 
    Keep the project config private. It can contain GSTINs, bank details,
@@ -53,23 +70,23 @@ and Swift code.
 Generate a monthly invoice package:
 
 ```sh
-ruby generate_month.rb "January 2026"
+ruby src/generate_month.rb "January 2026"
 ```
 
 Generate an invoice directly:
 
 ```sh
-python3 generate_invoice.py "January 2026"
+ruby src/generate_invoice.rb "January 2026"
 ```
 
 Use the timer CLI:
 
 ```sh
-ruby time_log.rb status
-ruby time_log.rb start
-ruby time_log.rb pause
-ruby time_log.rb finish
-ruby time_log.rb discard
+ruby src/time_log.rb status
+ruby src/time_log.rb start
+ruby src/time_log.rb pause
+ruby src/time_log.rb finish
+ruby src/time_log.rb discard
 ```
 
 Build the menu-bar app:
@@ -80,10 +97,15 @@ cd macos-timer
 open build/InvoiceTimer.app
 ```
 
-The built app contains its backend, renderer dependencies, Node.js runtime, and
-headless Chromium. It can be moved out of the checkout without losing access to
-the application code. Ruby and Python are invoked from macOS for the current
-backend implementation.
+The built app contains its backend, pinned Rubyzip dependency, renderer
+dependencies, Node.js runtime, and headless Chromium. It can be moved out of the
+checkout without losing access to the application code. It invokes Ruby from
+macOS; Python, Bundler, and globally installed gems are not needed at runtime.
+
+Rubyzip is locked to 2.4.1 for compatibility with Ruby 2.6. The build copies the
+resolved gem into the app's private backend directory. The timesheet generator
+preserves its XML layout under `templates/timesheet`, including a versioned
+Unicode table used to estimate wrapped row heights.
 
 ## Configuration and privacy
 
@@ -97,7 +119,7 @@ Mutable application data is not stored in the source checkout. On macOS:
 - generated invoices/timesheets: the project's user-selected `outputDir`
 
 On other Unix-like systems, the equivalent XDG data, cache, and state locations
-are used. `ruby time_log.rb storage-paths` prints the exact resolved paths.
+are used. `ruby src/time_log.rb storage-paths` prints the exact resolved paths.
 
 Each registry entry retains the absolute `configPath` selected when the project
 was added. The app does not copy or create project configs. The selected
@@ -117,6 +139,118 @@ Each invoice month is self-contained under the configured output directory:
 ```
 
 Invoice generation reads the monthly time log directly from this directory.
+
+## Document locale
+
+Set `locale` at the root of the project JSON:
+
+```json
+"locale": "en-IN"
+```
+
+Omitting it preserves the existing `en-IN` output. Supported values are:
+
+| Locale | Example amount | Example invoice date |
+| --- | --- | --- |
+| `en-IN` | `12,34,567.89` | `01 Sep 2026` |
+| `en-US` | `1,234,567.89` | `Sep 01, 2026` |
+| `de-DE` | `1.234.567,89` | `01.09.2026` |
+
+The setting controls invoice amounts, decimal quantities/rates and displayed
+dates, plus timesheet date formats. Money still uses two decimal places and
+decimal half-up rounding. It does not change currencies, exchange rates, GST,
+invoice calculations, English labels, or filenames. Timesheet hours and dates
+remain numeric Excel cells; numeric separators are displayed by the spreadsheet
+application according to its own settings.
+
+Unsupported values (including an empty string or `null`) produce an error.
+The standalone timesheet command also accepts `locale` in its input JSON beside
+`rows`; monthly generation reads it from the project config.
+
+## GST settings in the project JSON
+
+Open the active project's JSON using **Open Config JSON** in the app. GST is
+controlled by `taxProfile.type: "gst"`, the only supported tax type. Settings
+apply per project. Generic settings (`enabled`, `effectiveFrom`, and
+`amountsIncludeTax`) remain separate from GST-specific fields prefixed with `gst`.
+
+For invoices without GST, omit `taxProfile` or use:
+
+```json
+"taxProfile": { "type": "gst", "enabled": false }
+```
+
+For GST, configure the start date, total percentage rate, and treatment. This
+example uses a total 18% rate and the app's inter-state calculation:
+
+```json
+"taxProfile": {
+  "type": "gst",
+  "enabled": true,
+  "effectiveFrom": "2026-08-01",
+  "gstRatePercent": 18,
+  "gstDefaultTreatment": "interState",
+  "gstSacCode": "998314",
+  "amountsIncludeTax": false,
+  "gstReverseCharge": false
+}
+```
+
+| Field | How the app uses it |
+| --- | --- |
+| `type` | Use `"gst"`. Any other value is rejected, including on a disabled profile. |
+| `enabled` | `true` enables the GST profile; `false` disables it. |
+| `effectiveFrom` | Required `YYYY-MM-DD`. GST applies when the invoice month's first day is on or after this date. A mid-month date therefore starts GST with the next invoice month; the app does not prorate tax within a month. |
+| `gstRatePercent` | Required total rate from 0 to 100. For `intraState`, the app divides this rate equally between CGST and SGST. |
+| `gstDefaultTreatment` | Required calculation mode, listed below. |
+| `gstSacCode` | Required for a GST invoice; a string of 4 or 6 digits. Not required when GST does not apply. |
+| `gstSacDescription` | Optional display text. Omit it, use `null`, or leave it blank to print just the SAC code. It does not change tax calculations. |
+| `amountsIncludeTax` | Required; currently only `false` is supported. Configured service amounts exclude tax. |
+| `gstReverseCharge` | Required boolean. `true` suppresses the app's added tax rows and tax amount. |
+
+Supported `gstDefaultTreatment` values:
+
+| Value | Calculation when `gstReverseCharge` is `false` |
+| --- | --- |
+| `intraState` | CGST + SGST; supplier and client state codes must match. |
+| `interState` | IGST; supplier and client state codes must differ. |
+| `exportWithPayment` | IGST. |
+| `exportWithoutPayment` | No added tax. |
+| `exempt` | No added tax. |
+
+The current GST invoice validator also requires `gst` details under **both**
+`from` and `client`, including for the export modes:
+
+```json
+"gst": {
+  "gstin": "08AAAAA0000A1Z5",
+  "state": "Rajasthan",
+  "stateCode": "08"
+}
+```
+
+Use each party's own details. The validator checks that GSTIN is 15 characters,
+`stateCode` is two digits, and the GSTIN prefix matches the state code. The app
+does not currently support a GST invoice for a client without those details.
+
+An optional description can be added inside `taxProfile`:
+
+```json
+"gstSacDescription": "Information technology design and development services"
+```
+
+`reimbursements.gstTreatment` separately controls whether reimbursements enter
+the taxable value; see [Reimbursements](#reimbursements). After editing tax
+settings, generate the invoice package again to recalculate its recorded total
+and PDF. The [complete example](project-config.example.json) shows the settings
+in context. These examples are JSON fragments to place inside the project
+config, not the project registry.
+
+Existing configs remain compatible: a missing `type` is treated as `"gst"`,
+and the old fields `defaultTreatment`, `sacCode`, `sacDescription`, `ratePercent`,
+and `reverseCharge` are accepted as aliases for their `gst`-prefixed names.
+Use the new names for new configs. Supplying both names with conflicting values
+is an error. The app does not automatically rewrite existing project configs.
 
 ## Optional Jira enrichment
 
@@ -208,13 +342,35 @@ git diff --cached
 ## Tests
 
 ```sh
-python3 -m unittest test_generate_invoice.py test_generate_timesheet.py
-ruby test_reimbursements.rb
-ruby test_jira_support.rb
-ruby -c time_log.rb
-ruby -c generate_month.rb
+ruby test/test_generate_invoice.rb
+ruby test/test_document_locale.rb
+ruby test/test_generate_timesheet.rb
+ruby test/test_reimbursements.rb
+ruby test/test_jira_support.rb
+ruby -c src/time_log.rb
+ruby -c src/generate_month.rb
 cd macos-timer && swift build
 ```
+
+After installing the renderer, run the end-to-end generation test:
+
+```sh
+ruby test/test_generation_integration.rb
+```
+
+To verify the packaged backend after building the app:
+
+```sh
+INVOICE_TEST_BACKEND="$PWD/macos-timer/build/InvoiceTimer.app/Contents/Resources/Backend" ruby test/test_generation_integration.rb
+```
+
+The integration test uses synthetic project data and temporary storage. For the
+packaged backend it clears installed-gem paths and blocks Python commands,
+then exercises timer actions, monthly generation, and both standalone document
+commands. Migration baselines in `test/fixtures` preserve the original invoice
+results and spreadsheet XML. Invoice totals are shared between config sync,
+reimbursements, and document generation; document-specific validation remains
+required when rendering an invoice.
 
 ## License
 

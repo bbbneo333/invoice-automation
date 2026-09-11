@@ -7,6 +7,7 @@ require "bigdecimal"
 require "digest"
 require "securerandom"
 require_relative "app_paths"
+require_relative "invoice_calculation"
 
 module TimeLog
   REGISTRY_PATH = AppPaths.registry_path
@@ -153,7 +154,7 @@ module TimeLog
   end
 
   def run_invoice_generation(month_label = currentMonthLabel)
-    stdout, stderr, status = Open3.capture3("ruby", File.join(__dir__, "generate_month.rb"), month_label)
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, File.join(__dir__, "generate_month.rb"), month_label)
     raise(stderr.empty? ? "Invoice generation failed" : stderr.strip) unless status.success?
 
     {
@@ -677,83 +678,13 @@ module TimeLog
     dailyHours(month_label).fetch("totalBilledHours")
   end
 
-  def invoice_period_start(month_label)
-    Date.strptime(month_label, "%B %Y")
-  rescue Date::Error
-    raise "Invalid invoice month: #{month_label.inspect}"
-  end
-
-  def invoice_tax_enabled?(config, month_label)
-    profile = config["taxProfile"]
-    return false unless profile
-    return false if profile["enabled"] == false
-    raise "taxProfile.enabled must be true or false" unless profile["enabled"] == true
-
-    effective_from = Date.iso8601(profile.fetch("effectiveFrom"))
-    invoice_period_start(month_label) >= effective_from
-  rescue Date::Error
-    raise "taxProfile.effectiveFrom must use YYYY-MM-DD"
-  end
-
   def decimal_money(value)
-    BigDecimal(value.to_s).round(2, :half_up)
-  rescue ArgumentError
-    raise "Invoice amount inputs must be numeric"
+    InvoiceCalculation.money(value)
   end
 
   def calculated_invoice_amount(config, record, month_label, hours)
-    service_amount = decimal_money(
-      BigDecimal(hours.to_s) * BigDecimal(config.fetch("rateUsd").to_s) * BigDecimal(config.fetch("exchRate").to_s)
-    )
-    tax_enabled = invoice_tax_enabled?(config, month_label)
-    taxable_reimbursements = BigDecimal("0")
-    excluded_reimbursements = BigDecimal("0")
-
-    reimbursement_treatment = config.fetch("reimbursements", {}).fetch("gstTreatment", "excludedFromTaxableValue")
-    unless %w[includedInTaxableValue excludedFromTaxableValue].include?(reimbursement_treatment)
-      raise "reimbursements.gstTreatment must be includedInTaxableValue or excludedFromTaxableValue"
-    end
-
-    record.fetch("reimbursements", []).each do |item|
-      amount = decimal_money(item.fetch("amount"))
-      if reimbursement_treatment == "includedInTaxableValue"
-        taxable_reimbursements += amount
-      else
-        excluded_reimbursements += amount
-      end
-    end
-
-    taxable_value = decimal_money(service_amount + taxable_reimbursements)
-    tax_total = BigDecimal("0")
-    if tax_enabled
-      profile = config.fetch("taxProfile")
-      raise "Only taxProfile.amountsIncludeTax=false is currently supported" unless profile.fetch("amountsIncludeTax") == false
-
-      rate = BigDecimal(profile.fetch("ratePercent").to_s)
-      treatment = profile.fetch("defaultTreatment")
-      reverse_charge = profile.fetch("reverseCharge")
-      raise "taxProfile.reverseCharge must be true or false" unless [true, false].include?(reverse_charge)
-
-      case treatment
-      when "intraState"
-        supplier_state = config.fetch("from").fetch("gst").fetch("stateCode")
-        client_state = config.fetch("client").fetch("gst").fetch("stateCode")
-        raise "intraState treatment requires matching supplier and client state codes" unless supplier_state == client_state
-
-        unless reverse_charge
-          half_tax = decimal_money(taxable_value * rate / BigDecimal("200"))
-          tax_total = half_tax * 2
-        end
-      when "interState", "exportWithPayment"
-        tax_total = decimal_money(taxable_value * rate / BigDecimal("100")) unless reverse_charge
-      when "exportWithoutPayment", "exempt"
-        tax_total = BigDecimal("0")
-      else
-        raise "Unsupported taxProfile.defaultTreatment: #{treatment}"
-      end
-    end
-
-    decimal_money(taxable_value + excluded_reimbursements + tax_total)
+    period_start = InvoiceCalculation.parse_month(month_label).first
+    InvoiceCalculation.calculate(config, record.merge("hours" => hours), period_start).fetch("grandTotal")
   end
 
   def reimbursementEntries(month_label)
@@ -872,7 +803,7 @@ if $PROGRAM_NAME == __FILE__
     end
   end
 
-  abort("Usage: ruby time_log.rb status|start|pause|finish|discard|total|sync [\"May 2026\"]") if command.nil?
+  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync [\"May 2026\"]") if command.nil?
 
   begin
     result = case command
@@ -886,7 +817,7 @@ if $PROGRAM_NAME == __FILE__
       TimeLog.reimbursementEntries(month_label)
     when "add-reimbursement"
       reimbursement_month = month_arg.call
-      abort("Usage: ruby time_log.rb add-reimbursement [\"May 2026\"] NAME AMOUNT [ATTACHMENT]") if ARGV.length < 2
+      abort("Usage: ruby src/time_log.rb add-reimbursement [\"May 2026\"] NAME AMOUNT [ATTACHMENT]") if ARGV.length < 2
       name = ARGV.shift
       amount = ARGV.shift
       attachment = ARGV.shift
@@ -894,16 +825,16 @@ if $PROGRAM_NAME == __FILE__
       TimeLog.statusLog
     when "remove-reimbursement"
       reimbursement_month = month_arg.call
-      abort("Usage: ruby time_log.rb remove-reimbursement [\"May 2026\"] ID") if ARGV.empty?
+      abort("Usage: ruby src/time_log.rb remove-reimbursement [\"May 2026\"] ID") if ARGV.empty?
       TimeLog.removeReimbursement(reimbursement_month, ARGV.shift)
       TimeLog.statusLog
     when "switch-project"
-      abort("Usage: ruby time_log.rb switch-project LABEL") if ARGV.empty?
+      abort("Usage: ruby src/time_log.rb switch-project LABEL") if ARGV.empty?
 
       TimeLog.switchProject(ARGV.join(" "))
       TimeLog.statusLog
     when "add-project"
-      abort("Usage: ruby time_log.rb add-project LABEL /path/to/config.json") if ARGV.length < 2
+      abort("Usage: ruby src/time_log.rb add-project LABEL /path/to/config.json") if ARGV.length < 2
 
       label = ARGV.shift
       path = ARGV.join(" ")
@@ -921,7 +852,7 @@ if $PROGRAM_NAME == __FILE__
       TimeLog.dailyHours(month_label)
     when "set-day"
       edit_month = month_arg.call
-      abort("Usage: ruby time_log.rb set-day [\"May 2026\"] DATE timer|manual [ACTUAL_HOURS] [BILLED_HOURS] [NOTE]") if ARGV.length < 2
+      abort("Usage: ruby src/time_log.rb set-day [\"May 2026\"] DATE timer|manual [ACTUAL_HOURS] [BILLED_HOURS] [NOTE]") if ARGV.length < 2
 
       date = ARGV.shift
       source = ARGV.shift
@@ -931,17 +862,17 @@ if $PROGRAM_NAME == __FILE__
       TimeLog.setDailyHours(edit_month, date, source, hours, billed_hours, note)
     when "delete-day"
       edit_month = month_arg.call
-      abort("Usage: ruby time_log.rb delete-day [\"May 2026\"] DATE") if ARGV.empty?
+      abort("Usage: ruby src/time_log.rb delete-day [\"May 2026\"] DATE") if ARGV.empty?
 
       TimeLog.deleteDailyHours(edit_month, ARGV.shift)
     when "set-target"
       edit_month = month_arg.call
-      abort("Usage: ruby time_log.rb set-target [\"May 2026\"] HOURS") if ARGV.empty?
+      abort("Usage: ruby src/time_log.rb set-target [\"May 2026\"] HOURS") if ARGV.empty?
 
       TimeLog.setTargetHours(edit_month, ARGV.shift)
     when "set-daily-target"
       edit_month = month_arg.call
-      abort("Usage: ruby time_log.rb set-daily-target [\"May 2026\"] HOURS") if ARGV.empty?
+      abort("Usage: ruby src/time_log.rb set-daily-target [\"May 2026\"] HOURS") if ARGV.empty?
 
       TimeLog.setDailyTargetHours(edit_month, ARGV.shift)
     when "start"

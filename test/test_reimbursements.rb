@@ -5,7 +5,7 @@ ENV["INVOICE_AUTOMATION_DATA_DIR"] = File.join(TEST_STORAGE_ROOT, "Application S
 ENV["INVOICE_AUTOMATION_LOG_DIR"] = File.join(TEST_STORAGE_ROOT, "Logs", "InvoiceTimer")
 
 require "minitest/autorun"
-require_relative "time_log"
+require_relative "../src/time_log"
 
 class ReimbursementTest < Minitest::Test
   def setup
