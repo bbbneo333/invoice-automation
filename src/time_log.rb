@@ -526,7 +526,7 @@ module TimeLog
     end.sort_by { |row| row.fetch("date") }
     total_actual_hours = rows.sum { |row| row.fetch("actualHours").to_f }.round(2)
     total_billed_hours = rows.sum { |row| row.fetch("billedHours").to_f }.round(2)
-    working_days = rows.count { |row| row.fetch("actualHours").to_f.positive? }
+    working_days = rows.count
     average_hours = working_days.positive? ? (total_actual_hours / working_days).round(2) : 0.0
     daily_target_hours = current_daily_target_hours(paths[:config], paths[:record]).round(2)
     planning_average = daily_target_hours.positive? ? daily_target_hours : (average_hours.positive? ? average_hours : 8.0)

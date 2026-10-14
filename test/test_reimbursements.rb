@@ -30,6 +30,14 @@ class ReimbursementTest < Minitest::Test
     assert_equal File.join(TEST_STORAGE_ROOT, "project", "config.json"), project.fetch("configPath")
   end
 
+  def test_saved_manual_day_counts_as_working_day
+    daily = TimeLog.dailyHours("August 2026")
+
+    assert_equal 1, daily.fetch("workingDays")
+    assert_equal 0.0, daily.fetch("totalActualHours")
+    assert_equal 1.0, daily.fetch("totalBilledHours")
+  end
+
   def test_add_and_remove_with_attachment
     source = File.join(TEST_STORAGE_ROOT, "receipt.pdf")
     File.write(source, "supporting document")
