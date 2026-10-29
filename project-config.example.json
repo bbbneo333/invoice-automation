@@ -47,6 +47,7 @@
     "effectiveFrom": "2026-01-01",
     "gstSacCode": "998314",
     "gstSacDescription": "Information technology consulting and support services",
+    "gstUqc": "NA",
     "gstRatePercent": 18,
     "amountsIncludeTax": false,
     "gstReverseCharge": false,

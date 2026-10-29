@@ -161,6 +161,17 @@ module TimeLog
     }
   end
 
+  def run_gst_generation(month_label = currentMonthLabel)
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, File.join(__dir__, "generate_gstr1.rb"), month_label)
+    raise(stderr.empty? ? "GSTR-1 generation failed" : stderr.strip) unless status.success?
+
+    {
+      "month" => month_label,
+      "output" => stdout.strip,
+      "message" => stderr.strip
+    }
+  end
+
   def currentMonthLabel(now: Time.now)
     now.strftime("%B %Y")
   end
@@ -765,7 +776,7 @@ if $PROGRAM_NAME == __FILE__
     end
   end
 
-  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync [\"May 2026\"]") if command.nil?
+  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|generate-gst [\"May 2026\"]") if command.nil?
 
   begin
     result = case command
@@ -807,6 +818,16 @@ if $PROGRAM_NAME == __FILE__
     when "generate"
       result = TimeLog.run_invoice_generation(month_label)
       TimeLog.statusLog(month_label).merge(
+        "generation" => {
+          "output" => result["output"],
+          "message" => result["message"]
+        }
+      )
+    when "generate-gst"
+      result = TimeLog.run_gst_generation(month_label)
+      TimeLog.statusLog.merge(
+        "month" => result["month"],
+        "outputDir" => File.dirname(result["output"]),
         "generation" => {
           "output" => result["output"],
           "message" => result["message"]

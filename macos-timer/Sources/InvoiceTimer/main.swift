@@ -825,7 +825,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var status: TimeLogStatus?
     private var statusFetchedAt = Date()
     private var lastError: String?
-    private var isGenerating = false
+    private var generationKind: String?
+    private var isGenerating: Bool { generationKind != nil }
     private var generationStartedAt: Date?
     private var displayTimer: DispatchSourceTimer?
     private var activity: NSObjectProtocol?
@@ -1012,6 +1013,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
         menu.addItem(generateInvoiceMenuItem())
+        menu.addItem(generateGstMenuItem())
         menu.addItem(editMenuItem())
         menu.addItem(reimbursementsMenuItem())
         menu.addItem(actionItem("Refresh", action: #selector(refreshStatus)))
@@ -1030,7 +1032,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func generateInvoiceMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: isGenerating ? "Generating Invoice..." : "Generate Invoice", action: nil, keyEquivalent: "")
+        let item = NSMenuItem(title: generationKind == "invoice" ? "Generating Invoice..." : "Generate Invoice", action: nil, keyEquivalent: "")
         item.isEnabled = hasProject && !isGenerating
 
         let submenu = NSMenu()
@@ -1052,6 +1054,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let custom = NSMenuItem(title: "Custom", action: nil, keyEquivalent: "")
         custom.isEnabled = false
         submenu.addItem(custom)
+
+        item.submenu = submenu
+        return item
+    }
+
+    private func generateGstMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: generationKind == "gst" ? "Generating GST..." : "Generate GST", action: nil, keyEquivalent: "")
+        item.isEnabled = hasProject && !isGenerating
+
+        let submenu = NSMenu()
+        let currentMonth = status?.currentMonth ?? status?.month ?? "Current Month"
+        let previousMonth = status?.previousMonth ?? "Previous Month"
+
+        let current = NSMenuItem(title: "Current Return Period (\(currentMonth))", action: #selector(generateGstForMonth(_:)), keyEquivalent: "")
+        current.target = self
+        current.representedObject = currentMonth
+        current.isEnabled = hasProject && !isGenerating
+        submenu.addItem(current)
+
+        let previous = NSMenuItem(title: "Previous Return Period (\(previousMonth))", action: #selector(generateGstForMonth(_:)), keyEquivalent: "")
+        previous.target = self
+        previous.representedObject = previousMonth
+        previous.isEnabled = hasProject && !isGenerating
+        submenu.addItem(previous)
 
         item.submenu = submenu
         return item
@@ -1430,7 +1456,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func generateInvoice(month: String? = nil) {
         guard !isGenerating else { return }
-        isGenerating = true
+        generationKind = "invoice"
         generationStartedAt = Date()
         updateTitle()
         rebuildMenu()
@@ -1444,7 +1470,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.status = result
                     self.statusFetchedAt = Date()
                     self.lastError = nil
-                    self.isGenerating = false
+                    self.generationKind = nil
                     self.updateTitle()
                     self.updateActivity()
                     self.rebuildMenu()
@@ -1458,12 +1484,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 await MainActor.run {
                     self.lastError = error.localizedDescription
-                    self.isGenerating = false
+                    self.generationKind = nil
                     self.updateTitle()
                     self.updateActivity()
                     self.rebuildMenu()
                     self.notify(
                         title: "Invoice generation failed",
+                        body: self.shortError(error.localizedDescription),
+                        destination: "errorLog",
+                        path: TimeLogClient.errorLogURL.path
+                    )
+                }
+            }
+        }
+    }
+
+    @objc private func generateGstForMonth(_ sender: NSMenuItem) {
+        generateGst(month: sender.representedObject as? String)
+    }
+
+    private func generateGst(month: String? = nil) {
+        guard !isGenerating else { return }
+        generationKind = "gst"
+        generationStartedAt = Date()
+        updateTitle()
+        rebuildMenu()
+
+        Task.detached {
+            do {
+                let client = TimeLogClient()
+                let arguments = month.map { [$0] } ?? []
+                let result = try client.run("generate-gst", arguments)
+                await MainActor.run {
+                    self.status = result
+                    self.statusFetchedAt = Date()
+                    self.lastError = nil
+                    self.generationKind = nil
+                    self.updateTitle()
+                    self.updateActivity()
+                    self.rebuildMenu()
+                    self.notify(
+                        title: "GST JSON generated",
+                        body: "\(result.projectLabel) \(result.month)",
+                        destination: "folder",
+                        path: result.outputDir
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    self.lastError = error.localizedDescription
+                    self.generationKind = nil
+                    self.updateTitle()
+                    self.updateActivity()
+                    self.rebuildMenu()
+                    self.notify(
+                        title: "GST generation failed",
                         body: self.shortError(error.localizedDescription),
                         destination: "errorLog",
                         path: TimeLogClient.errorLogURL.path

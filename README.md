@@ -273,6 +273,7 @@ example uses a total 18% rate and the app's inter-state calculation:
   "gstRatePercent": 18,
   "gstDefaultTreatment": "interState",
   "gstSacCode": "998314",
+  "gstUqc": "NA",
   "amountsIncludeTax": false,
   "gstReverseCharge": false
 }
@@ -287,6 +288,7 @@ example uses a total 18% rate and the app's inter-state calculation:
 | `gstDefaultTreatment` | Required calculation mode, listed below. |
 | `gstSacCode` | Required for a GST invoice; a string of 4 or 6 digits. Not required when GST does not apply. |
 | `gstSacDescription` | Optional display text. Omit it, use `null`, or leave it blank to print just the SAC code. It does not change tax calculations. |
+| `gstUqc` | Required only for GSTR-1 JSON export. Use `"NA"` for service SAC codes; the exporter reports service quantity as zero as required by the current Offline Tool. |
 | `amountsIncludeTax` | Required; currently only `false` is supported. Configured service amounts exclude tax. |
 | `gstReverseCharge` | Required boolean. `true` suppresses the app's added tax rows and tax amount. |
 
@@ -327,6 +329,21 @@ settings, generate the invoice package again to recalculate its total
 and PDF. The [complete example](project-config.example.json) shows the settings
 in context. These examples are JSON fragments to place inside the project
 config, not the project registry.
+
+## GSTR-1 JSON export
+
+Use **Generate GST** and choose **Current Return Period** or **Previous Return
+Period**. The selected month is the GSTR-1 filing period. The app finds the
+already-generated invoice dated in that month and writes
+`<invoice number> GSTR-1 - <filing period>.json` beside its PDF, even when that
+invoice is stored under the preceding service/work month.
+
+The export uses the GST Returns Offline Tool 3.2.4 JSON envelope and contains
+B2B, HSN B2B, and Documents Issued data. It currently supports regular
+intra-state and inter-state GST invoices only. Invoices with reimbursements are
+rejected, and cancelled documents are not represented.
+The file can be checked with the official
+[GST Returns Offline Tool](https://www.gst.gov.in/download/returns) before upload.
 
 Existing configs remain compatible: a missing `type` is treated as `"gst"`,
 and the old fields `defaultTreatment`, `sacCode`, `sacDescription`, `ratePercent`,
