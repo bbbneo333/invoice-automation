@@ -78,7 +78,8 @@ module GstInputTracker
       attributes = validated_attributes(original_month, label, date, gst_amount, total_amount, status, found_month)
       preserved = bill.slice(
         "id", "createdAt", "supplierGstin", "supplierName", "invoiceNumber",
-        "gstr2bDocumentKey", "matchSource", "matchMethod", "itcEligibility"
+        "gstr2bDocumentKey", "matchSource", "matchMethod", "itcEligibility",
+        "imsDocumentKey", "imsStatus", "imsSeenInMonth", "imsLastSeenAt", "imsImported"
       )
       bill.replace(preserved.merge(attributes).merge("updatedAt" => now.iso8601))
     end
@@ -159,6 +160,107 @@ module GstInputTracker
     reconciled
   end
 
+  def reconcile_ims(config, period, portal_invoices, now: Time.now.utc)
+    period_label = InvoiceCalculation.parse_month(period).first.strftime("%B %Y")
+    reconciled = nil
+    update_state(config) do |state|
+      bills = state.fetch("bills")
+      results = []
+      matched_existing = 0
+      imported_new = 0
+      ambiguous = 0
+
+      portal_invoices.each do |invoice|
+        existing = bills.find { |bill| bill["imsDocumentKey"] == invoice.fetch("documentKey") }
+        if existing
+          apply_ims_match(existing, invoice, period_label, now)
+          result = existing["imsImported"] ? "imported" : "matched"
+          result == "imported" ? imported_new += 1 : matched_existing += 1
+          results << invoice.merge("reconciliationStatus" => result, "localBillId" => existing.fetch("id"))
+          next
+        end
+
+        candidates = match_candidates(bills, invoice)
+        if candidates.length == 1
+          bill = candidates.first
+          imported = bill["imsImported"] == true
+          apply_ims_match(bill, invoice, period_label, now)
+          imported ? imported_new += 1 : matched_existing += 1
+          results << invoice.merge("reconciliationStatus" => imported ? "imported" : "matched", "localBillId" => bill.fetch("id"))
+        elsif candidates.length > 1
+          ambiguous += 1
+          results << invoice.merge("reconciliationStatus" => "ambiguous", "candidateBillIds" => candidates.map { |bill| bill.fetch("id") })
+        else
+          bill = build_ims_bill(invoice, period_label, now)
+          bills << bill
+          imported_new += 1
+          results << invoice.merge("reconciliationStatus" => "imported", "localBillId" => bill.fetch("id"))
+        end
+      end
+
+      statuses = portal_invoices.group_by { |invoice| invoice.fetch("imsStatus") }
+      missing = bills.count do |bill|
+        Date.iso8601(bill.fetch("date")) <= InvoiceCalculation.parse_month(period_label).last &&
+          bill.fetch("status") == "missing" && !bill["imsDocumentKey"]
+      end
+      reconciled = {
+        "summary" => {
+          "portalInvoiceCount" => portal_invoices.length,
+          "matchedCount" => matched_existing,
+          "importedCount" => imported_new,
+          "ambiguousCount" => ambiguous,
+          "missingLocalCount" => missing,
+          "acceptedCount" => statuses.fetch("accepted", []).length,
+          "rejectedCount" => statuses.fetch("rejected", []).length,
+          "pendingCount" => statuses.fetch("pending", []).length,
+          "noActionCount" => statuses.fetch("no_action", []).length,
+          "portalGst" => portal_invoices.sum { |invoice| decimal(invoice.fetch("gstAmount"), "IMS GST") }.round(2).to_f
+        },
+        "invoices" => results
+      }
+    end
+    reconciled
+  end
+
+  def apply_ims_match(bill, invoice, period_label, now)
+    if bill["imsImported"]
+      bill["date"] = invoice.fetch("invoiceDate")
+      bill["gstAmount"] = InvoiceCalculation.format_monetary_value(invoice.fetch("gstAmount"), "IMS GST")
+      bill["totalAmount"] = InvoiceCalculation.format_monetary_value(invoice.fetch("invoiceValue"), "IMS invoice value")
+    end
+    bill["supplierGstin"] = invoice.fetch("supplierGstin")
+    bill["supplierName"] = invoice.fetch("supplierName")
+    bill["invoiceNumber"] = invoice.fetch("invoiceNumber")
+    bill["imsDocumentKey"] = invoice.fetch("documentKey")
+    bill["imsStatus"] = invoice.fetch("imsStatus")
+    bill["imsSeenInMonth"] = period_label
+    bill["imsLastSeenAt"] = now.iso8601
+    bill["updatedAt"] = now.iso8601
+  end
+
+  def build_ims_bill(invoice, period_label, now)
+    supplier = invoice.fetch("supplierName").to_s.strip
+    supplier = invoice.fetch("supplierGstin") if supplier.empty?
+    {
+      "id" => SecureRandom.uuid,
+      "label" => [supplier, invoice.fetch("invoiceNumber")].reject(&:empty?).join(" · "),
+      "date" => invoice.fetch("invoiceDate"),
+      "gstAmount" => InvoiceCalculation.format_monetary_value(invoice.fetch("gstAmount"), "IMS GST"),
+      "totalAmount" => InvoiceCalculation.format_monetary_value(invoice.fetch("invoiceValue"), "IMS invoice value"),
+      "status" => "missing",
+      "supplierGstin" => invoice.fetch("supplierGstin"),
+      "supplierName" => invoice.fetch("supplierName"),
+      "invoiceNumber" => invoice.fetch("invoiceNumber"),
+      "imsDocumentKey" => invoice.fetch("documentKey"),
+      "imsStatus" => invoice.fetch("imsStatus"),
+      "imsSeenInMonth" => period_label,
+      "imsLastSeenAt" => now.iso8601,
+      "imsImported" => true,
+      "createdAt" => now.iso8601,
+      "updatedAt" => now.iso8601
+    }
+  end
+
   def match_candidates(bills, invoice)
     available = bills.reject do |bill|
       bill["gstr2bDocumentKey"] && bill["gstr2bDocumentKey"] != invoice.fetch("documentKey")
@@ -230,6 +332,9 @@ module GstInputTracker
     pending = all_bills.select do |bill|
       Date.iso8601(bill.fetch("date")) <= end_date && bill.fetch("status") == "missing"
     end
+    ims_seen = all_bills.select do |bill|
+      Date.iso8601(bill.fetch("date")) <= end_date && bill["imsDocumentKey"]
+    end
     {
       "month" => month_label,
       "quarterLabel" => quarter_label(month_label),
@@ -243,6 +348,8 @@ module GstInputTracker
       "carriedInGst" => carried_in.sum { |bill| decimal(bill.fetch("gstAmount"), "gstAmount") }.round(2).to_f,
       "resolvedLaterCount" => resolved_later.length,
       "ineligibleCount" => original.count { |bill| bill["itcEligibility"] == "ineligible" },
+      "imsSeenCount" => ims_seen.length,
+      "imsAwaiting2bCount" => ims_seen.count { |bill| bill.fetch("status") == "missing" },
       "pendingCount" => pending.length,
       "pendingGst" => pending.sum { |bill| decimal(bill.fetch("gstAmount"), "gstAmount") }.round(2).to_f
     }

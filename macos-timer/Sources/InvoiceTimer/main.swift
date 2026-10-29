@@ -63,6 +63,7 @@ struct GstChecklistItem: Decodable {
     let action: String
     let dueDate: String?
     let availableDate: String?
+    let recommendedDate: String?
     let generatedAt: String?
     let completedAt: String?
     let invoiceCount: Int?
@@ -77,6 +78,15 @@ struct GstChecklistItem: Decodable {
     let ambiguousCount: Int?
     let missingLocalCount: Int?
     let previousBillsResolvedCount: Int?
+    let acceptedCount: Int?
+    let rejectedCount: Int?
+    let pendingCount: Int?
+    let noActionCount: Int?
+    let newCount: Int?
+    let changedCount: Int?
+    let removedCount: Int?
+    let imsSeenCount: Int?
+    let imsAwaiting2bCount: Int?
     let taxableValue: Double?
     let gstAmount: Double?
     let effectiveInputGst: Double?
@@ -119,6 +129,8 @@ struct GstInputMonth: Decodable {
     let pendingCount: Int
     let pendingGst: Double
     let ineligibleCount: Int
+    let imsSeenCount: Int
+    let imsAwaiting2bCount: Int
 }
 
 struct GstInputBillMonth: Decodable {
@@ -136,6 +148,8 @@ struct GstInputBillMonth: Decodable {
     let pendingCount: Int
     let pendingGst: Double
     let ineligibleCount: Int
+    let imsSeenCount: Int
+    let imsAwaiting2bCount: Int
     let bills: [GstInputBill]
 }
 
@@ -154,6 +168,48 @@ struct GstInputBill: Decodable {
     let matchSource: String?
     let matchMethod: String?
     let itcEligibility: String?
+    let imsStatus: String?
+    let imsSeenInMonth: String?
+    let imsImported: Bool?
+}
+
+struct ImsImportData: Decodable {
+    let period: String
+    let importedAt: String
+    let sourceFilename: String
+    let summary: ImsImportSummary
+    let invoices: [ImsPortalInvoice]
+}
+
+struct ImsImportSummary: Decodable {
+    let portalInvoiceCount: Int
+    let matchedCount: Int
+    let importedCount: Int
+    let ambiguousCount: Int
+    let missingLocalCount: Int
+    let acceptedCount: Int
+    let rejectedCount: Int
+    let pendingCount: Int
+    let noActionCount: Int
+    let newCount: Int
+    let changedCount: Int
+    let removedCount: Int
+    let portalGst: Double
+}
+
+struct ImsPortalInvoice: Decodable {
+    let documentKey: String
+    let supplierGstin: String
+    let supplierName: String
+    let invoiceNumber: String
+    let invoiceDate: String
+    let invoiceValue: Double
+    let taxableValue: Double
+    let gstAmount: Double
+    let imsStatus: String
+    let reconciliationStatus: String
+    let localBillId: String?
+    let candidateBillIds: [String]?
 }
 
 struct Gstr2bImportData: Decodable {
@@ -449,6 +505,16 @@ final class TimeLogClient {
     func gstr2bImport(period: String) throws -> Gstr2bImportData {
         let output = try runData("gstr2b-import", [period])
         return try JSONDecoder().decode(Gstr2bImportData.self, from: output)
+    }
+
+    func importIms(period: String, path: String) throws -> ImsImportData {
+        let output = try runData("import-ims", [period, path])
+        return try JSONDecoder().decode(ImsImportData.self, from: output)
+    }
+
+    func imsImport(period: String) throws -> ImsImportData {
+        let output = try runData("ims-import", [period])
+        return try JSONDecoder().decode(ImsImportData.self, from: output)
     }
 
     func gstBills(month: String) throws -> GstInputBillMonth {
@@ -1053,6 +1119,7 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private let editButton = NSButton(title: "Edit", target: nil, action: nil)
     private let deleteButton = NSButton(title: "Delete", target: nil, action: nil)
+    private weak var activeFoundMonthPicker: NSPopUpButton?
     var onChange: (() -> Void)?
 
     init(monthLabel: String) {
@@ -1166,7 +1233,8 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
         let carriedIn = data?.carriedInCount ?? 0
         let pending = data?.pendingCount ?? 0
         let ineligible = data?.ineligibleCount ?? 0
-        summaryLabel.stringValue = "Recorded GST: \(money(normal))  ·  Effective GST this period: \(money(effective))  ·  Carried in: \(carriedIn)  ·  Still pending: \(pending)  ·  Ineligible: \(ineligible)"
+        let imsSeen = data?.imsSeenCount ?? 0
+        summaryLabel.stringValue = "Recorded GST: \(money(normal))  ·  Effective GST: \(money(effective))  ·  IMS seen: \(imsSeen)  ·  Carried in: \(carriedIn)  ·  Still pending: \(pending)  ·  Ineligible: \(ineligible)"
         updateSelectionActions()
     }
 
@@ -1194,6 +1262,9 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
                 let prefix = bill.matchSource == "gstr2b" ? "Matched" : "Manual"
                 field.stringValue = "\(prefix) · \(bill.foundInMonth ?? "")".trimmingCharacters(in: .whitespaces)
                 field.textColor = .systemGreen
+            } else if let imsStatus = bill.imsStatus {
+                field.stringValue = "IMS \(displayImsStatus(imsStatus)) · Awaiting 2B"
+                field.textColor = imsStatus == "rejected" ? .systemRed : .systemBlue
             } else {
                 field.stringValue = bill.carriedForward ? "Pending · Carried" : "Missing"
                 field.textColor = .systemOrange
@@ -1264,12 +1335,16 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
         gstField.placeholderString = "GST amount"
         let totalField = NSTextField(string: bill?.totalAmount ?? "")
         totalField.placeholderString = "Total amount"
-        let foundCheckbox = NSButton(checkboxWithTitle: "Manual GSTR-2B confirmation (override)", target: nil, action: nil)
+        let foundCheckbox = NSButton(checkboxWithTitle: "Manually confirmed in GSTR-2B", target: nil, action: nil)
         foundCheckbox.state = bill?.status == "found" ? .on : .off
         let foundMonthPicker = NSPopUpButton()
         let billDate = bill.flatMap { parseDate($0.date) } ?? firstDateOfMonth()
         foundMonthPicker.addItems(withTitles: monthChoices(from: billDate, including: bill?.foundInMonth))
         foundMonthPicker.selectItem(withTitle: bill?.foundInMonth ?? defaultFoundMonth(from: billDate))
+        foundMonthPicker.isEnabled = foundCheckbox.state == .on
+        foundCheckbox.target = self
+        foundCheckbox.action = #selector(manualFoundChanged(_:))
+        activeFoundMonthPicker = foundMonthPicker
 
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "Label"), labelField],
@@ -1285,7 +1360,9 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
         grid.column(at: 1).width = 240
         alert.accessoryView = grid
 
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let response = alert.runModal()
+        activeFoundMonthPicker = nil
+        guard response == .alertFirstButtonReturn else { return }
         let date = isoDate(datePicker.dateValue)
         let status = foundCheckbox.state == .on ? "found" : "missing"
         let foundMonth = status == "found" ? foundMonthPicker.titleOfSelectedItem : nil
@@ -1309,6 +1386,10 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
         } catch {
             messageLabel.stringValue = error.localizedDescription
         }
+    }
+
+    @objc private func manualFoundChanged(_ sender: NSButton) {
+        activeFoundMonthPicker?.isEnabled = sender.state == .on
     }
 
     @objc private func refreshClicked() {
@@ -1391,6 +1472,137 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         return formatter.string(from: NSNumber(value: value)) ?? String(format: "₹%.2f", value)
+    }
+
+    private func displayImsStatus(_ status: String) -> String {
+        status == "no_action" ? "No Action" : status.capitalized
+    }
+}
+
+@MainActor
+final class ImsResultsWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
+    private let data: ImsImportData
+    private let onManageBills: () -> Void
+    private let onImportAgain: () -> Void
+    private let tableView = NSTableView()
+
+    init(data: ImsImportData, onManageBills: @escaping () -> Void, onImportAgain: @escaping () -> Void) {
+        self.data = data
+        self.onManageBills = onManageBills
+        self.onImportAgain = onImportAgain
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 520),
+            styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false
+        )
+        window.title = "IMS Reconciliation · \(data.period)"
+        super.init(window: window)
+        buildUI()
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    private func buildUI() {
+        guard let contentView = window?.contentView else { return }
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.alignment = .leading
+        root.spacing = 12
+        root.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 18),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -18),
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 18),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -18)
+        ])
+
+        let summary = data.summary
+        let summaryLabel = NSTextField(wrappingLabelWithString:
+            "\(summary.portalInvoiceCount) IMS records · \(summary.matchedCount) matched · \(summary.importedCount) added · \(summary.ambiguousCount) ambiguous · \(summary.missingLocalCount) local missing\n\(summary.acceptedCount) accepted · \(summary.rejectedCount) rejected · \(summary.pendingCount) pending · \(summary.noActionCount) no action · GST \(money(summary.portalGst))\nSince previous import: \(summary.newCount) new · \(summary.changedCount) changed · \(summary.removedCount) removed · Source: \(data.sourceFilename)"
+        )
+        summaryLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        root.addArrangedSubview(summaryLabel)
+
+        let columns: [(String, String, CGFloat)] = [
+            ("supplier", "Supplier", 210), ("invoice", "Invoice", 110), ("date", "Date", 95),
+            ("total", "Total", 90), ("gst", "GST", 85), ("ims", "IMS Action", 100), ("result", "Local Result", 150)
+        ]
+        for (id, title, width) in columns {
+            let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
+            column.title = title
+            column.width = width
+            tableView.addTableColumn(column)
+        }
+        tableView.dataSource = self
+        tableView.delegate = self
+        tableView.usesAlternatingRowBackgroundColors = true
+        tableView.headerView = NSTableHeaderView()
+        let scroll = NSScrollView()
+        scroll.documentView = tableView
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        root.addArrangedSubview(scroll)
+        scroll.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        scroll.setContentHuggingPriority(.defaultLow, for: .vertical)
+
+        let buttons = NSStackView()
+        buttons.orientation = .horizontal
+        buttons.spacing = 8
+        buttons.addArrangedSubview(NSButton(title: "Manage Bills", target: self, action: #selector(manageBills)))
+        buttons.addArrangedSubview(NSButton(title: "Import Updated IMS", target: self, action: #selector(importAgain)))
+        buttons.addArrangedSubview(NSButton(title: "Close", target: self, action: #selector(closeWindow)))
+        root.addArrangedSubview(buttons)
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { data.invoices.count }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard let id = tableColumn?.identifier.rawValue else { return nil }
+        let invoice = data.invoices[row]
+        let field = NSTextField(labelWithString: "")
+        field.lineBreakMode = .byTruncatingTail
+        switch id {
+        case "supplier": field.stringValue = invoice.supplierName.isEmpty ? invoice.supplierGstin : invoice.supplierName
+        case "invoice": field.stringValue = invoice.invoiceNumber
+        case "date": field.stringValue = displayDate(invoice.invoiceDate)
+        case "total": field.stringValue = money(invoice.invoiceValue)
+        case "gst": field.stringValue = money(invoice.gstAmount)
+        case "ims": field.stringValue = invoice.imsStatus == "no_action" ? "No Action" : invoice.imsStatus.capitalized
+        case "result":
+            switch invoice.reconciliationStatus {
+            case "matched": field.stringValue = "Matched local bill"
+            case "imported": field.stringValue = "Added provisionally"
+            case "ambiguous": field.stringValue = "Needs review"
+            default: field.stringValue = invoice.reconciliationStatus.capitalized
+            }
+        default: break
+        }
+        return field
+    }
+
+    @objc private func manageBills() { onManageBills() }
+    @objc private func importAgain() { close(); onImportAgain() }
+    @objc private func closeWindow() { close() }
+
+    private func money(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale(identifier: "en_IN")
+        formatter.currencyCode = "INR"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "₹%.2f", value)
+    }
+
+    private func displayDate(_ isoDate: String) -> String {
+        let input = DateFormatter()
+        input.locale = Locale(identifier: "en_US_POSIX")
+        input.dateFormat = "yyyy-MM-dd"
+        guard let date = input.date(from: isoDate) else { return isoDate }
+        let output = DateFormatter()
+        output.locale = Locale(identifier: "en_IN")
+        output.dateFormat = "d MMM yyyy"
+        return output.string(from: date)
     }
 }
 
@@ -1539,6 +1751,7 @@ final class GstDashboardWindowController: NSWindowController {
     private let checklistStack = NSStackView()
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private var billsWindow: GstBillsWindowController?
+    private var imsResultsWindow: ImsResultsWindowController?
     private var gstr2bResultsWindow: Gstr2bResultsWindowController?
 
     convenience init() {
@@ -1633,7 +1846,7 @@ final class GstDashboardWindowController: NSWindowController {
         root.addArrangedSubview(checklistStack)
         checklistStack.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
 
-        let checklistNote = NSTextField(wrappingLabelWithString: "Effective input GST includes only bills marked Found. Liability is an estimate; confirm portal balances, adjustments and any due-date extension on the GST portal.")
+        let checklistNote = NSTextField(wrappingLabelWithString: "IMS matches are provisional. Effective input GST includes only GSTR-2B matches or explicit manual overrides. Confirm portal balances, adjustments and any due-date extension on the GST portal.")
         checklistNote.textColor = .secondaryLabelColor
         checklistNote.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         root.addArrangedSubview(checklistNote)
@@ -1651,9 +1864,10 @@ final class GstDashboardWindowController: NSWindowController {
 
     private var selectedPeriod: GstDashboardPeriod? {
         guard let periods = dashboard?.periods, !periods.isEmpty else { return nil }
-        let index = periodMenu.indexOfSelectedItem
-        guard periods.indices.contains(index) else { return periods.first }
-        return periods[index]
+        guard let month = periodMenu.selectedItem?.representedObject as? String else {
+            return dashboard?.defaultPeriod.flatMap { target in periods.first { $0.month == target } } ?? periods.first
+        }
+        return periods.first { $0.month == month } ?? periods.first
     }
 
     private var selectedPreference: GstDashboardPreference? {
@@ -1672,12 +1886,25 @@ final class GstDashboardWindowController: NSWindowController {
             dashboard = try client.gstDashboard()
             let target = previous ?? dashboard?.defaultPeriod
             periodMenu.removeAllItems()
-            for period in dashboard?.periods ?? [] {
-                let suffix = period.status == "filed" ? " — Filed" : period.status == "generated" ? " — Generated" : ""
-                periodMenu.addItem(withTitle: "\(period.month)\(suffix)")
+            periodMenu.menu?.autoenablesItems = false
+            let periods = dashboard?.periods ?? []
+            let currentMonth = Calendar(identifier: .gregorian).date(from: Calendar(identifier: .gregorian).dateComponents([.year, .month], from: Date())) ?? Date()
+            let active = periods.filter { (monthDate($0.month) ?? currentMonth) >= currentMonth }.sorted { (monthDate($0.month) ?? currentMonth) < (monthDate($1.month) ?? currentMonth) }
+            let past = periods.filter { (monthDate($0.month) ?? currentMonth) < currentMonth }.sorted { (monthDate($0.month) ?? currentMonth) > (monthDate($1.month) ?? currentMonth) }
+            for period in active {
+                addPeriodMenuItem(period, currentMonth: currentMonth)
             }
-            if let target, let index = dashboard?.periods.firstIndex(where: { $0.month == target }) {
-                periodMenu.selectItem(at: index)
+            if !past.isEmpty {
+                periodMenu.menu?.addItem(.separator())
+                let heading = NSMenuItem(title: "Past periods", action: nil, keyEquivalent: "")
+                heading.isEnabled = false
+                periodMenu.menu?.addItem(heading)
+                for period in past {
+                    addPeriodMenuItem(period, currentMonth: currentMonth)
+                }
+            }
+            if let target, let item = periodMenu.itemArray.first(where: { ($0.representedObject as? String) == target }) {
+                periodMenu.select(item)
             }
             selectedMonth = selectedPeriod?.month
             messageLabel.stringValue = ""
@@ -1687,6 +1914,22 @@ final class GstDashboardWindowController: NSWindowController {
             messageLabel.stringValue = error.localizedDescription
             setActionsEnabled(false)
         }
+    }
+
+    private func addPeriodMenuItem(_ period: GstDashboardPeriod, currentMonth: Date) {
+        let periodDate = monthDate(period.month)
+        let status = period.status == "filed" ? " — Filed" : period.status == "generated" ? " — Generated" : ""
+        let current = periodDate == currentMonth ? " — Current" : ""
+        let item = NSMenuItem(title: "\(period.month)\(current)\(status)", action: nil, keyEquivalent: "")
+        item.representedObject = period.month
+        periodMenu.menu?.addItem(item)
+    }
+
+    private func monthDate(_ label: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.date(from: label)
     }
 
     private func render() {
@@ -1773,6 +2016,29 @@ final class GstDashboardWindowController: NSWindowController {
     private func checklistDetail(_ item: GstChecklistItem) -> String {
         let due = item.dueDate.map { "Due \(displayDate($0))" }
         switch item.id {
+        case "imsImport":
+            var parts = ["Available continuously"]
+            if let recommendedDate = item.recommendedDate {
+                parts.append("Recommended monthly check \(displayDate(recommendedDate))")
+            }
+            if item.status == "attention" {
+                parts.append("Refresh now: the saved snapshot was imported before this check date")
+            }
+            if let portalCount = item.portalInvoiceCount {
+                parts.append(contentsOf: [
+                    "\(portalCount) IMS",
+                    "\(item.matchedCount ?? 0) matched",
+                    "\(item.importedCount ?? 0) added",
+                    "\(item.acceptedCount ?? 0) accepted",
+                    "\(item.pendingCount ?? 0) pending",
+                    "\(item.rejectedCount ?? 0) rejected",
+                    "\(item.newCount ?? 0) new",
+                    "\(item.changedCount ?? 0) changed"
+                ])
+            } else {
+                parts.append("Download the complete IMS Excel from the GST portal")
+            }
+            return parts.joined(separator: " · ")
         case "gstr2bImport":
             if let portalCount = item.portalInvoiceCount {
                 return [
@@ -1795,6 +2061,7 @@ final class GstDashboardWindowController: NSWindowController {
             if (item.carriedInCount ?? 0) > 0 { parts.append("\(item.carriedInCount ?? 0) carried in") }
             if (item.resolvedLaterCount ?? 0) > 0 { parts.append("\(item.resolvedLaterCount ?? 0) resolved later") }
             if (item.ineligibleCount ?? 0) > 0 { parts.append("\(item.ineligibleCount ?? 0) ineligible") }
+            if (item.imsSeenCount ?? 0) > 0 { parts.append("\(item.imsSeenCount ?? 0) seen in IMS") }
             parts.append("GST \(money(item.gstAmount ?? 0))")
             parts.append("Effective \(money(item.effectiveInputGst ?? 0))")
             return parts.joined(separator: " · ")
@@ -1845,6 +2112,8 @@ final class GstDashboardWindowController: NSWindowController {
     private func checklistButtonTitle(_ item: GstChecklistItem) -> String {
         switch item.action {
         case "manageBills": return "Manage Bills"
+        case "importIms": return "Import IMS"
+        case "viewIms": return "Review IMS"
         case "importGstr2b": return "Import GSTR-2B"
         case "viewGstr2b": return "Review Results"
         case "generate": return "Generate"
@@ -1861,6 +2130,8 @@ final class GstDashboardWindowController: NSWindowController {
         guard !isWorking else { return false }
         switch item.action {
         case "manageBills": return true
+        case "importIms": return item.status == "ready" || item.status == "attention"
+        case "viewIms": return true
         case "importGstr2b": return item.status == "ready"
         case "viewGstr2b": return true
         case "generate": return period.canGenerate
@@ -1943,6 +2214,10 @@ final class GstDashboardWindowController: NSWindowController {
         switch sender.checklistAction {
         case "manageBills":
             manageBillsForSelectedPeriod()
+        case "importIms":
+            importImsForSelectedPeriod()
+        case "viewIms":
+            viewImsForSelectedPeriod()
         case "importGstr2b":
             importGstr2bForSelectedPeriod()
         case "viewGstr2b":
@@ -2020,6 +2295,64 @@ final class GstDashboardWindowController: NSWindowController {
         billsWindow?.showWindow(nil)
         billsWindow?.window?.center()
         billsWindow?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func importImsForSelectedPeriod() {
+        guard let period = selectedPeriod else { return }
+        let panel = NSOpenPanel()
+        panel.title = "Import IMS snapshot for \(period.month)"
+        panel.prompt = "Import and Reconcile"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [UTType(filenameExtension: "xlsx")].compactMap { $0 }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        isWorking = true
+        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.stringValue = "Importing and reconciling IMS…"
+        render()
+        Task.detached {
+            do {
+                let imported = try TimeLogClient().importIms(period: period.month, path: url.path)
+                await MainActor.run {
+                    self.isWorking = false
+                    self.showImsResults(imported)
+                    self.reload()
+                    self.messageLabel.textColor = .secondaryLabelColor
+                    self.messageLabel.stringValue = "IMS snapshot imported and reconciled"
+                }
+            } catch {
+                await MainActor.run {
+                    self.isWorking = false
+                    self.messageLabel.textColor = .systemRed
+                    self.messageLabel.stringValue = error.localizedDescription
+                    self.render()
+                }
+            }
+        }
+    }
+
+    private func viewImsForSelectedPeriod() {
+        guard let period = selectedPeriod else { return }
+        do {
+            showImsResults(try client.imsImport(period: period.month))
+        } catch {
+            messageLabel.textColor = .systemRed
+            messageLabel.stringValue = error.localizedDescription
+        }
+    }
+
+    private func showImsResults(_ data: ImsImportData) {
+        let controller = ImsResultsWindowController(
+            data: data,
+            onManageBills: { [weak self] in self?.manageBillsForSelectedPeriod() },
+            onImportAgain: { [weak self] in self?.importImsForSelectedPeriod() }
+        )
+        imsResultsWindow = controller
+        controller.showWindow(nil)
+        controller.window?.center()
+        controller.window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

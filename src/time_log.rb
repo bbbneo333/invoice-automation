@@ -798,7 +798,7 @@ if $PROGRAM_NAME == __FILE__
     end
   end
 
-  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|gst-dashboard|gst-bills|add-gst-bill|update-gst-bill|delete-gst-bill|import-gstr2b|gstr2b-import|set-gst-preference|generate-gst|generate-iff|mark-iff-filed|mark-gstr1-filed|mark-pmt06-reviewed|mark-pmt06-paid|mark-gstr3b-reviewed|mark-gstr3b-filed [\"May 2026\"]") if command.nil?
+  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|gst-dashboard|gst-bills|add-gst-bill|update-gst-bill|delete-gst-bill|import-ims|ims-import|import-gstr2b|gstr2b-import|set-gst-preference|generate-gst|generate-iff|mark-iff-filed|mark-gstr1-filed|mark-pmt06-reviewed|mark-pmt06-paid|mark-gstr3b-reviewed|mark-gstr3b-filed [\"May 2026\"]") if command.nil?
 
   begin
     result = case command
@@ -834,6 +834,14 @@ if $PROGRAM_NAME == __FILE__
       abort("Usage: ruby src/time_log.rb delete-gst-bill \"October 2026\" ID") unless ARGV.length == 2
       bill_month, id = ARGV
       GstInputTracker.delete(TimeLog.load_config, bill_month, id)
+    when "import-ims"
+      abort("Usage: ruby src/time_log.rb import-ims \"October 2026\" /path/to/ims.xlsx") unless ARGV.length == 2
+      filing_period, import_path = ARGV
+      ImsImporter.import(TimeLog.load_config, filing_period, import_path)
+    when "ims-import"
+      entry = ImsImporter.latest(TimeLog.load_config, month_label)
+      raise InvoiceCalculation::ConfigError, "No IMS snapshot has been imported for #{month_label}" unless entry
+      entry
     when "import-gstr2b"
       abort("Usage: ruby src/time_log.rb import-gstr2b \"December 2026\" /path/to/gstr2b.json") unless ARGV.length == 2
       filing_period, import_path = ARGV

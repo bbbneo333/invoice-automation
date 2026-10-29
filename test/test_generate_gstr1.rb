@@ -216,6 +216,25 @@ class QrmpGenerationTest < Minitest::Test
     payload.fetch("b2b").flat_map { |customer| customer.fetch("inv") }.map { |invoice| invoice.fetch("inum") }
   end
 
+  def write_simple_ims(path)
+    rows = [
+      ["GSTIN of supplier", "Trade/Legal name", "Invoice number", "Invoice Date", "Invoice Value(₹)", "Taxable Value (₹)", "Integrated Tax(₹)"],
+      ["29SUPPLIER0001Z1", "Supplier", "IMS-1", "15/10/2026", "118", "100", "18"]
+    ]
+    body = rows.each_with_index.map do |row, row_index|
+      cells = row.each_with_index.map do |value, column_index|
+        column = (65 + column_index).chr
+        %(<c r="#{column}#{row_index + 1}" t="inlineStr"><is><t>#{REXML::Text.normalize(value)}</t></is></c>)
+      end.join
+      %(<row r="#{row_index + 1}">#{cells}</row>)
+    end.join
+    Zip::File.open(path, create: true) do |archive|
+      archive.get_output_stream("xl/worksheets/sheet1.xml") do |stream|
+        stream.write %(<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>#{body}</sheetData></worksheet>)
+      end
+    end
+  end
+
   def test_qrmp_periods_and_configuration
     assert_equal({ "scheme" => "qrmp", "iff" => "enabled" }, GstFiling.settings(@config))
     period = GstFiling.quarter("November 2026")
@@ -378,6 +397,12 @@ class QrmpGenerationTest < Minitest::Test
     assert_equal 2_700.0, input.fetch("gstAmount")
     assert_equal 1_800.0, input.fetch("effectiveInputGst")
 
+    ims = october.fetch("checklist").find { |item| item.fetch("id") == "imsImport" }
+    assert_equal "Check IMS now for October 2026 purchase bills; repeat after 14 November 2026", ims.fetch("title")
+    assert_equal "ready", ims.fetch("status")
+    assert_equal "importIms", ims.fetch("action")
+    assert_equal "2026-11-14", ims.fetch("recommendedDate")
+
     generate = october.fetch("checklist").find { |item| item.fetch("id") == "generate" }
     assert_equal "Generate October 2026 IFF JSON", generate.fetch("title")
     assert_equal "2026-11-13", generate.fetch("dueDate")
@@ -413,7 +438,7 @@ class QrmpGenerationTest < Minitest::Test
     gstr3b = december.fetch("checklist").find { |item| item.fetch("id") == "gstr3b" }
     assert_equal "2027-01-24", gstr3b.fetch("dueDate")
     assert_equal "blocked", gstr3b.fetch("status")
-    assert_equal 6, december.fetch("checklist").length
+    assert_equal 7, december.fetch("checklist").length
   end
 
   def test_checklist_rejects_tasks_that_do_not_apply_to_the_period
@@ -499,6 +524,15 @@ class QrmpGenerationTest < Minitest::Test
     dashboard = JSON.parse(stdout)
     assert_equal "qrmp", dashboard.fetch("scheme")
     assert_equal "filed", dashboard.fetch("periods").find { |period| period.fetch("month") == "October 2026" }.fetch("status")
+
+    ims_path = File.join(@directory, "ims.xlsx")
+    write_simple_ims(ims_path)
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "import-ims", "October 2026", ims_path)
+    assert status.success?, stderr
+    assert_equal 1, JSON.parse(stdout).dig("summary", "portalInvoiceCount")
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "ims-import", "October 2026")
+    assert status.success?, stderr
+    assert_equal "October 2026", JSON.parse(stdout).fetch("period")
 
     stdout, stderr, status = Open3.capture3(
       environment, RbConfig.ruby, cli, "set-gst-preference", "January 2027", "monthly", "disabled"

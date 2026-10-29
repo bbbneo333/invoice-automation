@@ -12,16 +12,16 @@ require_relative "invoice_store"
 module Gstr2bImporter
   ConfigError = InvoiceCalculation::ConfigError
   STATE_VERSION = 1
-  INVOICE_NUMBER_KEYS = %w[inum invnum invoice_number invoicenumber document_number documentnumber].freeze
-  INVOICE_DATE_KEYS = %w[dt idt invdt invoice_date invoicedate document_date documentdate].freeze
-  INVOICE_VALUE_KEYS = %w[val invvalue invoice_value invoicevalue total_invoice_value totalinvoicevalue].freeze
+  INVOICE_NUMBER_KEYS = %w[inum invnum invoice_no invoiceno invoice_number invoicenumber document_no documentno document_number documentnumber invoice_debit_note_credit_note_no invoice_debit_note_credit_note_number].freeze
+  INVOICE_DATE_KEYS = %w[dt idt invdt invoice_date invoicedate document_date documentdate invoice_debit_note_credit_note_date].freeze
+  INVOICE_VALUE_KEYS = %w[val invvalue invoice_value invoicevalue total_invoice_value totalinvoicevalue total_value totalvalue total_value_of_supply].freeze
   TAXABLE_VALUE_KEYS = %w[txval taxable_value taxablevalue].freeze
-  IGST_KEYS = %w[igst iamt integrated_tax integratedtax].freeze
-  CGST_KEYS = %w[cgst camt central_tax centraltax].freeze
-  SGST_KEYS = %w[sgst samt state_tax state_ut_tax statetax utgst].freeze
+  IGST_KEYS = %w[igst iamt integrated_tax integratedtax integrated_tax_amount].freeze
+  CGST_KEYS = %w[cgst camt central_tax centraltax central_tax_amount].freeze
+  SGST_KEYS = %w[sgst samt state_tax state_ut_tax statetax utgst state_tax_amount state_ut_tax_amount].freeze
   CESS_KEYS = %w[cess csamt cess_amount cessamount].freeze
   SUPPLIER_GSTIN_KEYS = %w[ctin sgstin supplier_gstin suppliergstin gstin_of_supplier].freeze
-  SUPPLIER_NAME_KEYS = %w[trdnm supplier_name suppliername trade_legal_name tradelegalname].freeze
+  SUPPLIER_NAME_KEYS = %w[trdnm supplier_name suppliername trade_name tradename legal_name legalname trade_legal_name tradelegalname].freeze
   ELIGIBILITY_KEYS = %w[itcavl itc_available itcavailability itc_availability].freeze
 
   module_function

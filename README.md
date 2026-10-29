@@ -421,6 +421,20 @@ while the original month shows it as resolved later. This prevents a credit
 found in a later quarter from rewriting the Effective GST of an already
 completed quarter.
 
+The checklist also provides **Import IMS** for each available period. On the GST
+portal, use **Download IMS Details (Excel)** and select that XLSX in the app.
+IMS is available continuously; the checklist shows the 14th of the following
+month as the recommended monthly reconciliation date, after the normal supplier
+GSTR-1/IFF cut-offs. You can import earlier, but the app will request a refreshed
+snapshot on that date if the saved import was taken before it.
+The importer reads the complete workbook, including its accepted, rejected,
+pending and no-action sheets; matches existing and previous bills; and adds
+untracked IMS invoices provisionally. Repeated imports report records that are
+new, changed or removed since the previous IMS snapshot. A bill seen in IMS is
+labelled **Awaiting 2B** and does not enter Effective GST, even when its IMS
+action is Accepted. Accept, Reject and Pending actions must still be performed
+on the GST portal.
+
 The quarter-end checklist provides **Import GSTR-2B** when the statement is
 normally available. Download the JSON or XLSX from the GST portal and select it
 in the app. The importer validates the filing period, reads B2B invoices and
@@ -454,6 +468,8 @@ ruby src/time_log.rb mark-pmt06-reviewed "October 2026"
 ruby src/time_log.rb mark-pmt06-paid "October 2026"
 ruby src/time_log.rb generate-gst "December 2026"
 ruby src/time_log.rb mark-gstr1-filed "December 2026"
+ruby src/time_log.rb import-ims "October 2026" /path/to/ims.xlsx
+ruby src/time_log.rb ims-import "October 2026"
 ruby src/time_log.rb import-gstr2b "December 2026" /path/to/gstr2b.json
 ruby src/time_log.rb gstr2b-import "December 2026"
 ruby src/time_log.rb mark-gstr3b-reviewed "December 2026"
