@@ -249,6 +249,27 @@ Unsupported values (including an empty string or `null`) produce an error.
 The standalone timesheet command also accepts `locale` in its input JSON beside
 `rows`; monthly generation reads it from the project config.
 
+## Invoice date
+
+Set `invoiceDateTiming` in the project JSON to control the date printed on a
+monthly invoice and saved in its snapshot:
+
+```json
+"invoiceDateTiming": "lastOfServiceMonth"
+```
+
+Supported values are:
+
+- `firstOfFollowingMonth`: date an August invoice on September 1. This is the
+  default and preserves existing configurations.
+- `lastOfServiceMonth`: date an August invoice on August 31.
+
+GSTR-1 export uses the saved invoice date to select its filing period. With
+`lastOfServiceMonth`, generate the return for the service month; with the
+default, generate it for the following month. Reproducing a saved snapshot
+retains its original invoice date. Normal regeneration applies the project's
+current setting.
+
 ## GST settings in the project JSON
 
 Open the active project's JSON using **Open Config JSON** in the app. GST is

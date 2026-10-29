@@ -96,6 +96,14 @@ class Gstr1GenerationTest < Minitest::Test
     refute details.key?("iamt")
   end
 
+  def test_period_end_invoice_date_uses_service_month_as_filing_period
+    snapshot = Marshal.load(Marshal.dump(@snapshot))
+    snapshot["invoiceDate"] = "2026-08-31"
+    payload = Gstr1Generator.build_payload(@config, snapshot)
+    assert_equal "082026", payload["fp"]
+    assert_equal "31-08-2026", payload.dig("b2b", 0, "inv", 0, "idt")
+  end
+
   def test_writes_json_beside_the_matching_invoice
     path = Gstr1Generator.generate("September 2026", config: @config)
     assert_equal File.join(@store.directory(@store.find("August 2026")), "001 GSTR-1 - September 2026.json"), path

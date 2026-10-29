@@ -147,6 +147,30 @@ class InvoiceGenerationTest < Minitest::Test
     end
   end
 
+  def test_invoice_date_timing_defaults_to_first_of_following_month
+    _, period_end = InvoiceCalculation.parse_month("February 2024")
+    assert_equal Date.new(2024, 3, 1), InvoiceCalculation.invoice_date({}, period_end)
+    assert_equal Date.new(2024, 3, 1), InvoiceCalculation.invoice_date({ "invoiceDateTiming" => "firstOfFollowingMonth" }, period_end)
+  end
+
+  def test_invoice_date_can_use_last_day_of_service_month
+    _, leap_year_end = InvoiceCalculation.parse_month("February 2024")
+    _, year_end = InvoiceCalculation.parse_month("December 2026")
+    config = { "invoiceDateTiming" => "lastOfServiceMonth" }
+    assert_equal Date.new(2024, 2, 29), InvoiceCalculation.invoice_date(config, leap_year_end)
+    assert_equal Date.new(2026, 12, 31), InvoiceCalculation.invoice_date(config, year_end)
+  end
+
+  def test_invalid_invoice_date_timing_is_rejected
+    _, period_end = InvoiceCalculation.parse_month("August 2026")
+    [nil, true, "", "lastDay"].each do |timing|
+      error = assert_raises(InvoiceCalculation::ConfigError) do
+        InvoiceCalculation.invoice_date({ "invoiceDateTiming" => timing }, period_end)
+      end
+      assert_includes error.message, "invoiceDateTiming"
+    end
+  end
+
   def test_sac_description_is_optional_and_does_not_change_totals
     [:missing, nil, "", "   ", "  Custom service description  "].each do |description|
       config, record = sample.values_at("config", "record")

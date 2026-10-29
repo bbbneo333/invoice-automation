@@ -1,5 +1,6 @@
 {
   "locale": "en-IN",
+  "invoiceDateTiming": "firstOfFollowingMonth",
   "jira": {
     "enabled": false,
     "domain": "your-company",

@@ -175,7 +175,8 @@ module InvoiceGenerator
       end
     else
       record = TimeLog.invoice_data(month_label, config)
-      period_start, period_end, invoice_date = InvoiceCalculation.parse_month(month_label)
+      period_start, period_end = InvoiceCalculation.parse_month(month_label)
+      invoice_date = InvoiceCalculation.invoice_date(config, period_end)
       calc = calculate_invoice(config, record, period_start)
       context = build_template_context(config, record, period_start, period_end, invoice_date, calc)
       snapshot = build_snapshot(config, record, period_start, period_end, invoice_date, calc, context)

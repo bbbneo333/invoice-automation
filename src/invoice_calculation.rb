@@ -6,6 +6,8 @@ module InvoiceCalculation
   class ConfigError < ArgumentError; end
 
   MONTHS = %w[January February March April May June July August September October November December].freeze
+  INVOICE_DATE_TIMINGS = %w[firstOfFollowingMonth lastOfServiceMonth].freeze
+  DEFAULT_INVOICE_DATE_TIMING = "firstOfFollowingMonth"
   TREATMENTS = %w[intraState interState exportWithPayment exportWithoutPayment exempt].freeze
   REIMBURSEMENT_TREATMENTS = %w[includedInTaxableValue excludedFromTaxableValue].freeze
   GST_FIELD_ALIASES = {
@@ -51,6 +53,15 @@ module InvoiceCalculation
     [start, next_month - 1, next_month]
   rescue ArgumentError
     raise ConfigError, "Invalid invoice month: #{month_label.inspect}"
+  end
+
+  def invoice_date(config, period_end)
+    timing = config.fetch("invoiceDateTiming", DEFAULT_INVOICE_DATE_TIMING)
+    unless timing.is_a?(String) && INVOICE_DATE_TIMINGS.include?(timing)
+      raise ConfigError, "invoiceDateTiming must be firstOfFollowingMonth or lastOfServiceMonth"
+    end
+
+    timing == "lastOfServiceMonth" ? period_end : period_end + 1
   end
 
   def tax_profile(config)

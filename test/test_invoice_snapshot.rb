@@ -51,6 +51,18 @@ class InvoiceSnapshotTest < Minitest::Test
     assert_equal snapshot, @store.find(@month)["snapshot"]
   end
 
+  def test_configured_invoice_date_is_snapshotted_and_preserved_on_reproduction
+    @config["invoiceDateTiming"] = "lastOfServiceMonth"
+    File.write(@path, JSON.generate(@config))
+    generate
+    assert_equal "2026-08-31", @store.find(@month).fetch("snapshot").fetch("invoiceDate")
+
+    @config["invoiceDateTiming"] = "firstOfFollowingMonth"
+    File.write(@path, JSON.generate(@config))
+    generate(reproduce: true)
+    assert_equal "2026-08-31", @store.find(@month).fetch("snapshot").fetch("invoiceDate")
+  end
+
   def test_regeneration_refreshes_snapshot_and_removes_legacy_lifecycle
     generate
     path = File.join(@store.directory(@record), "invoice.json")
