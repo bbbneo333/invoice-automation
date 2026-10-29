@@ -45,6 +45,17 @@ class InvoiceGenerationTest < Minitest::Test
     assert_equal "12,34,56,78,90,12,345.68", DocumentLocale.money("123456789012345.675")
   end
 
+  def test_monetary_inputs_accept_standard_and_indian_grouping
+    assert_equal BigDecimal("15990.00"), InvoiceCalculation.parse_monetary_input("15,990.00", "amount")
+    assert_equal BigDecimal("123456.78"), InvoiceCalculation.parse_monetary_input("1,23,456.78", "amount")
+    assert_equal BigDecimal("15990.00"), InvoiceCalculation.parse_monetary_input("₹ 15,990.00", "amount")
+    assert_equal BigDecimal("15990.00"), InvoiceCalculation.parse_monetary_input("INR 15,990.00", "amount")
+    assert_equal "15990.00", InvoiceCalculation.format_monetary_value("₹15,990")
+    assert_raises(InvoiceCalculation::ConfigError) do
+      InvoiceCalculation.parse_monetary_input("1,2,3.00", "amount")
+    end
+  end
+
   def test_explicit_gst_schema_matches_all_existing_invoice_cases
     cases.each do |item|
       config, record = item.values_at("config", "record")

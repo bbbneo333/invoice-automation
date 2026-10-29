@@ -26,6 +26,7 @@ struct GstDashboard: Decodable {
     let defaultPeriod: String?
     let periods: [GstDashboardPeriod]
     let preferences: [GstDashboardPreference]
+    let inputMonths: [GstInputMonth]
 }
 
 struct GstDashboardPreference: Decodable {
@@ -73,6 +74,38 @@ struct GstDashboardInvoice: Decodable {
     let taxableValue: Double
     let taxTotal: Double
     let totalValue: Double
+}
+
+struct GstInputMonth: Decodable {
+    let month: String
+    let quarterLabel: String
+    let normalGst: Double
+    let effectiveGst: Double
+    let totalAmount: Double
+    let invoiceCount: Int
+    let foundCount: Int
+    let missingCount: Int
+}
+
+struct GstInputBillMonth: Decodable {
+    let month: String
+    let quarterLabel: String
+    let normalGst: Double
+    let effectiveGst: Double
+    let totalAmount: Double
+    let invoiceCount: Int
+    let foundCount: Int
+    let missingCount: Int
+    let bills: [GstInputBill]
+}
+
+struct GstInputBill: Decodable {
+    let id: String
+    let label: String
+    let date: String
+    let gstAmount: String
+    let totalAmount: String
+    let status: String
 }
 
 struct TimeLogStatus: Decodable {
@@ -324,6 +357,26 @@ final class TimeLogClient {
     func gstDashboard() throws -> GstDashboard {
         let output = try runData("gst-dashboard")
         return try JSONDecoder().decode(GstDashboard.self, from: output)
+    }
+
+    func gstBills(month: String) throws -> GstInputBillMonth {
+        let output = try runData("gst-bills", [month])
+        return try JSONDecoder().decode(GstInputBillMonth.self, from: output)
+    }
+
+    func addGstBill(month: String, label: String, date: String, gstAmount: String, totalAmount: String, status: String) throws -> GstInputBillMonth {
+        let output = try runData("add-gst-bill", [month, label, date, gstAmount, totalAmount, status])
+        return try JSONDecoder().decode(GstInputBillMonth.self, from: output)
+    }
+
+    func updateGstBill(month: String, bill: GstInputBill, label: String, date: String, gstAmount: String, totalAmount: String, status: String) throws -> GstInputBillMonth {
+        let output = try runData("update-gst-bill", [month, bill.id, label, date, gstAmount, totalAmount, status])
+        return try JSONDecoder().decode(GstInputBillMonth.self, from: output)
+    }
+
+    func deleteGstBill(month: String, id: String) throws -> GstInputBillMonth {
+        let output = try runData("delete-gst-bill", [month, id])
+        return try JSONDecoder().decode(GstInputBillMonth.self, from: output)
     }
 
     func setDay(month: String? = nil, date: String, source: String, actualHours: String = "", billedHours: String = "", note: String = "") throws -> DailyHours {
@@ -890,8 +943,308 @@ final class DailyHoursWindowController: NSWindowController, NSTableViewDataSourc
     }
 }
 
+final class GstMonthActionButton: NSButton {
+    var month = ""
+}
+
 @MainActor
-final class GstDashboardWindowController: NSWindowController {
+final class GstBillsWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
+    private let client = TimeLogClient()
+    private var monthLabel: String
+    private var data: GstInputBillMonth?
+    private let tableView = NSTableView()
+    private let summaryLabel = NSTextField(labelWithString: "")
+    private let messageLabel = NSTextField(wrappingLabelWithString: "")
+    private let editButton = NSButton(title: "Edit", target: nil, action: nil)
+    private let deleteButton = NSButton(title: "Delete", target: nil, action: nil)
+    var onChange: (() -> Void)?
+
+    init(monthLabel: String) {
+        self.monthLabel = monthLabel
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 430),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "GST Input Bills — \(monthLabel)"
+        window.minSize = NSSize(width: 620, height: 360)
+        super.init(window: window)
+        buildUI()
+        reload()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setMonth(_ month: String) {
+        monthLabel = month
+        window?.title = "GST Input Bills — \(month)"
+        reload()
+    }
+
+    private func buildUI() {
+        guard let contentView = window?.contentView else { return }
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = 12
+        root.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
+        ])
+
+        let note = NSTextField(wrappingLabelWithString: "Local tracking only. Found means you confirmed the bill on the GST portal; it is not verified automatically.")
+        note.textColor = .secondaryLabelColor
+        root.addArrangedSubview(note)
+
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.usesAlternatingRowBackgroundColors = true
+        tableView.rowHeight = 28
+        tableView.target = self
+        tableView.doubleAction = #selector(editSelected)
+        addColumn("label", "Label", 220)
+        addColumn("date", "Date", 100)
+        addColumn("gst", "GST", 100)
+        addColumn("total", "Total", 110)
+        addColumn("status", "Portal", 90)
+        scroll.documentView = tableView
+        root.addArrangedSubview(scroll)
+        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+
+        let actions = NSStackView()
+        actions.orientation = .horizontal
+        actions.alignment = .centerY
+        actions.spacing = 8
+        actions.addArrangedSubview(NSButton(title: "Add Bill", target: self, action: #selector(addBill)))
+        editButton.target = self
+        editButton.action = #selector(editSelected)
+        deleteButton.target = self
+        deleteButton.action = #selector(deleteSelected)
+        actions.addArrangedSubview(editButton)
+        actions.addArrangedSubview(deleteButton)
+        actions.addArrangedSubview(NSButton(title: "Refresh", target: self, action: #selector(refreshClicked)))
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        actions.addArrangedSubview(spacer)
+        root.addArrangedSubview(actions)
+        actions.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        root.addArrangedSubview(summaryLabel)
+        messageLabel.textColor = .systemRed
+        root.addArrangedSubview(messageLabel)
+        messageLabel.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        updateSelectionActions()
+    }
+
+    private func addColumn(_ identifier: String, _ title: String, _ width: CGFloat) {
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(identifier))
+        column.title = title
+        column.width = width
+        column.minWidth = identifier == "label" ? 150 : width
+        tableView.addTableColumn(column)
+    }
+
+    private func reload() {
+        do {
+            data = try client.gstBills(month: monthLabel)
+            messageLabel.stringValue = ""
+            render()
+        } catch {
+            messageLabel.stringValue = error.localizedDescription
+        }
+    }
+
+    private func render() {
+        tableView.reloadData()
+        let normal = data?.normalGst ?? 0
+        let effective = data?.effectiveGst ?? 0
+        let found = data?.foundCount ?? 0
+        let missing = data?.missingCount ?? 0
+        summaryLabel.stringValue = "GST: \(money(normal))  ·  Effective GST: \(money(effective))  ·  Found: \(found)  ·  Missing: \(missing)"
+        updateSelectionActions()
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        data?.bills.count ?? 0
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard let bill = data?.bills[row], let identifier = tableColumn?.identifier.rawValue else { return nil }
+        let field = NSTextField(labelWithString: "")
+        switch identifier {
+        case "label": field.stringValue = bill.label
+        case "date": field.stringValue = displayDate(bill.date)
+        case "gst":
+            field.stringValue = money(Double(bill.gstAmount) ?? 0)
+            field.alignment = .right
+        case "total":
+            field.stringValue = money(Double(bill.totalAmount) ?? 0)
+            field.alignment = .right
+        case "status":
+            field.stringValue = bill.status == "found" ? "Found" : "Missing"
+            field.textColor = bill.status == "found" ? .systemGreen : .systemOrange
+        default: break
+        }
+        return field
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        updateSelectionActions()
+    }
+
+    private func updateSelectionActions() {
+        let selected = tableView.selectedRow >= 0 && tableView.selectedRow < (data?.bills.count ?? 0)
+        editButton.isEnabled = selected
+        deleteButton.isEnabled = selected
+    }
+
+    private var selectedBill: GstInputBill? {
+        let row = tableView.selectedRow
+        guard row >= 0, let bills = data?.bills, bills.indices.contains(row) else { return nil }
+        return bills[row]
+    }
+
+    @objc private func addBill() {
+        presentEditor(bill: nil)
+    }
+
+    @objc private func editSelected() {
+        guard let bill = selectedBill else { return }
+        presentEditor(bill: bill)
+    }
+
+    @objc private func deleteSelected() {
+        guard let bill = selectedBill else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete \(bill.label)?"
+        alert.informativeText = "This removes only the local tracking record."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            data = try client.deleteGstBill(month: monthLabel, id: bill.id)
+            messageLabel.stringValue = ""
+            render()
+            onChange?()
+        } catch {
+            messageLabel.stringValue = error.localizedDescription
+        }
+    }
+
+    private func presentEditor(bill: GstInputBill?) {
+        let alert = NSAlert()
+        alert.messageText = bill == nil ? "Add GST Input Bill" : "Edit GST Input Bill"
+        alert.informativeText = "Enter values from the supplier invoice. Found is a manual portal-confirmation flag."
+        alert.addButton(withTitle: bill == nil ? "Add" : "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let labelField = NSTextField(string: bill?.label ?? "")
+        labelField.placeholderString = "Label"
+        let datePicker = NSDatePicker()
+        datePicker.datePickerStyle = .textFieldAndStepper
+        datePicker.datePickerElements = [.yearMonthDay]
+        datePicker.dateValue = bill.flatMap { parseDate($0.date) } ?? firstDateOfMonth()
+        let gstField = NSTextField(string: bill?.gstAmount ?? "")
+        gstField.placeholderString = "GST amount"
+        let totalField = NSTextField(string: bill?.totalAmount ?? "")
+        totalField.placeholderString = "Total amount"
+        let foundCheckbox = NSButton(checkboxWithTitle: "Found on GST portal", target: nil, action: nil)
+        foundCheckbox.state = bill?.status == "found" ? .on : .off
+
+        let grid = NSGridView(views: [
+            [NSTextField(labelWithString: "Label"), labelField],
+            [NSTextField(labelWithString: "Date"), datePicker],
+            [NSTextField(labelWithString: "GST"), gstField],
+            [NSTextField(labelWithString: "Total"), totalField],
+            [NSTextField(labelWithString: ""), foundCheckbox]
+        ])
+        grid.rowSpacing = 8
+        grid.columnSpacing = 10
+        grid.frame = NSRect(x: 0, y: 0, width: 360, height: 150)
+        grid.column(at: 1).width = 240
+        alert.accessoryView = grid
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let date = isoDate(datePicker.dateValue)
+        let status = foundCheckbox.state == .on ? "found" : "missing"
+        do {
+            if let bill {
+                data = try client.updateGstBill(
+                    month: monthLabel, bill: bill, label: labelField.stringValue,
+                    date: date, gstAmount: gstField.stringValue,
+                    totalAmount: totalField.stringValue, status: status
+                )
+            } else {
+                data = try client.addGstBill(
+                    month: monthLabel, label: labelField.stringValue, date: date,
+                    gstAmount: gstField.stringValue, totalAmount: totalField.stringValue,
+                    status: status
+                )
+            }
+            messageLabel.stringValue = ""
+            render()
+            onChange?()
+        } catch {
+            messageLabel.stringValue = error.localizedDescription
+        }
+    }
+
+    @objc private func refreshClicked() {
+        reload()
+    }
+
+    private func firstDateOfMonth() -> Date {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "MMMM yyyy"
+        return formatter.date(from: monthLabel) ?? Date()
+    }
+
+    private func parseDate(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: value)
+    }
+
+    private func isoDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private func displayDate(_ value: String) -> String {
+        guard let date = parseDate(value) else { return value }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_IN")
+        formatter.dateFormat = "d MMM yyyy"
+        return formatter.string(from: date)
+    }
+
+    private func money(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale(identifier: "en_IN")
+        formatter.currencyCode = "INR"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "₹%.2f", value)
+    }
+}
+
+@MainActor
+final class GstDashboardWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
     private let client = TimeLogClient()
     private var dashboard: GstDashboard?
     private var selectedMonth: String?
@@ -911,20 +1264,23 @@ final class GstDashboardWindowController: NSWindowController {
     private let taxValue = NSTextField(labelWithString: "—")
     private let invoiceValue = NSTextField(labelWithString: "—")
     private let taxBreakdownLabel = NSTextField(wrappingLabelWithString: "")
+    private let inputTableView = NSTableView()
+    private let cycleBalanceLabel = NSTextField(wrappingLabelWithString: "")
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private let generateButton = NSButton(title: "Generate", target: nil, action: nil)
     private let viewButton = NSButton(title: "View JSON", target: nil, action: nil)
     private let filedButton = NSButton(title: "Mark as Filed", target: nil, action: nil)
+    private var billsWindow: GstBillsWindowController?
 
     convenience init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 650, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 820, height: 780),
             styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "GST Dashboard"
-        window.minSize = NSSize(width: 600, height: 520)
+        window.minSize = NSSize(width: 760, height: 720)
         self.init(window: window)
         buildUI()
         reload()
@@ -940,7 +1296,7 @@ final class GstDashboardWindowController: NSWindowController {
         let root = NSStackView()
         root.orientation = .vertical
         root.alignment = .leading
-        root.spacing = 14
+        root.spacing = 8
         root.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(root)
         NSLayoutConstraint.activate([
@@ -1021,6 +1377,44 @@ final class GstDashboardWindowController: NSWindowController {
         root.addArrangedSubview(separator)
         separator.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
 
+        let inputTitle = NSTextField(labelWithString: "Input GST bills")
+        inputTitle.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        root.addArrangedSubview(inputTitle)
+        let inputNote = NSTextField(wrappingLabelWithString: "GST is the total recorded from your bills. Effective GST includes only bills you manually mark Found on the GST portal.")
+        inputNote.textColor = .secondaryLabelColor
+        root.addArrangedSubview(inputNote)
+
+        let inputScroll = NSScrollView()
+        inputScroll.hasVerticalScroller = false
+        inputScroll.borderType = .bezelBorder
+        inputTableView.delegate = self
+        inputTableView.dataSource = self
+        inputTableView.rowHeight = 30
+        inputTableView.headerView = NSTableHeaderView()
+        addInputColumn("month", "Month", 125)
+        addInputColumn("gst", "GST", 110)
+        addInputColumn("effective", "Effective GST", 120)
+        addInputColumn("invoices", "Invoices", 65)
+        addInputColumn("found", "Found", 55)
+        addInputColumn("missing", "Missing", 60)
+        addInputColumn("manage", "", 110)
+        inputScroll.documentView = inputTableView
+        root.addArrangedSubview(inputScroll)
+        inputScroll.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        inputScroll.heightAnchor.constraint(equalToConstant: 118).isActive = true
+
+        cycleBalanceLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        root.addArrangedSubview(cycleBalanceLabel)
+        cycleBalanceLabel.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        let balanceNote = NSTextField(wrappingLabelWithString: "Estimate only: it excludes existing credit-ledger balance, PMT-06 deposits, reversals and other GSTR-3B adjustments.")
+        balanceNote.textColor = .secondaryLabelColor
+        root.addArrangedSubview(balanceNote)
+
+        let invoiceSeparator = NSBox()
+        invoiceSeparator.boxType = .separator
+        root.addArrangedSubview(invoiceSeparator)
+        invoiceSeparator.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
         let invoicesTitle = NSTextField(labelWithString: "Invoices in this filing view")
         invoicesTitle.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
         root.addArrangedSubview(invoicesTitle)
@@ -1052,6 +1446,14 @@ final class GstDashboardWindowController: NSWindowController {
         root.addArrangedSubview(actions)
     }
 
+    private func addInputColumn(_ identifier: String, _ title: String, _ width: CGFloat) {
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(identifier))
+        column.title = title
+        column.width = width
+        column.minWidth = width
+        inputTableView.addTableColumn(column)
+    }
+
     private var selectedPeriod: GstDashboardPeriod? {
         guard let periods = dashboard?.periods, !periods.isEmpty else { return nil }
         let index = periodMenu.indexOfSelectedItem
@@ -1062,6 +1464,11 @@ final class GstDashboardWindowController: NSWindowController {
     private var selectedPreference: GstDashboardPreference? {
         guard let quarterLabel = selectedPeriod?.quarterLabel else { return nil }
         return dashboard?.preferences.first { $0.quarterLabel == quarterLabel }
+    }
+
+    private var selectedInputMonths: [GstInputMonth] {
+        guard let quarterLabel = selectedPeriod?.quarterLabel else { return [] }
+        return dashboard?.inputMonths.filter { $0.quarterLabel == quarterLabel } ?? []
     }
 
     private func reload() {
@@ -1110,6 +1517,8 @@ final class GstDashboardWindowController: NSWindowController {
             : period.invoices.map { invoice in
                 "Invoice \(invoice.number) · \(displayDate(invoice.date)) · \(invoice.customer) · \(money(invoice.totalValue))"
             }.joined(separator: "\n")
+        inputTableView.reloadData()
+        renderCycleBalance(quarterLabel: period.quarterLabel)
 
         generateButton.title = period.status == "generated" ? "Regenerate \(period.actionTitle)" : "Generate \(period.actionTitle)"
         generateButton.isEnabled = !isWorking && period.canGenerate
@@ -1118,6 +1527,61 @@ final class GstDashboardWindowController: NSWindowController {
         filedButton.isEnabled = !isWorking && period.status == "generated"
         filedButton.isHidden = period.status == "filed"
         periodMenu.isEnabled = !isWorking
+    }
+
+    private func renderCycleBalance(quarterLabel: String) {
+        let periods = dashboard?.periods.filter { $0.quarterLabel == quarterLabel } ?? []
+        let preference = dashboard?.preferences.first { $0.quarterLabel == quarterLabel }
+        let outputTax: Double
+        if preference?.scheme == "qrmp" {
+            outputTax = periods.first { $0.kind == "quarterlyGstr1" }?.amounts.outputTax ?? 0
+        } else {
+            outputTax = periods.reduce(0) { $0 + $1.amounts.outputTax }
+        }
+        let inputs = selectedInputMonths
+        let recordedInput = inputs.reduce(0) { $0 + $1.normalGst }
+        let effectiveInput = inputs.reduce(0) { $0 + $1.effectiveGst }
+        let balance = outputTax - effectiveInput
+        let balanceTitle = balance >= 0 ? "Estimated balance payable" : "Estimated excess input credit"
+        cycleBalanceLabel.stringValue = "Quarter: Output GST \(money(outputTax))  ·  Recorded input GST \(money(recordedInput))  ·  Effective input GST \(money(effectiveInput))  ·  \(balanceTitle) \(money(abs(balance)))"
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        selectedInputMonths.count
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard selectedInputMonths.indices.contains(row), let identifier = tableColumn?.identifier.rawValue else { return nil }
+        let month = selectedInputMonths[row]
+        if identifier == "manage" {
+            let button = GstMonthActionButton(title: "Manage Bills", target: self, action: #selector(manageInputBills(_:)))
+            button.month = month.month
+            button.isEnabled = !isWorking
+            return button
+        }
+
+        let field = NSTextField(labelWithString: "")
+        switch identifier {
+        case "month": field.stringValue = month.month
+        case "gst":
+            field.stringValue = money(month.normalGst)
+            field.alignment = .right
+        case "effective":
+            field.stringValue = money(month.effectiveGst)
+            field.alignment = .right
+        case "invoices":
+            field.stringValue = "\(month.invoiceCount)"
+            field.alignment = .center
+        case "found":
+            field.stringValue = "\(month.foundCount)"
+            field.alignment = .center
+        case "missing":
+            field.stringValue = "\(month.missingCount)"
+            field.alignment = .center
+            field.textColor = month.missingCount > 0 ? .systemOrange : .labelColor
+        default: break
+        }
+        return field
     }
 
     private func renderPreference() {
@@ -1207,6 +1671,21 @@ final class GstDashboardWindowController: NSWindowController {
         messageLabel.textColor = .secondaryLabelColor
         messageLabel.stringValue = ""
         render()
+    }
+
+    @objc private func manageInputBills(_ sender: GstMonthActionButton) {
+        if billsWindow == nil {
+            billsWindow = GstBillsWindowController(monthLabel: sender.month)
+            billsWindow?.onChange = { [weak self] in
+                self?.reload()
+            }
+        } else {
+            billsWindow?.setMonth(sender.month)
+        }
+        billsWindow?.showWindow(nil)
+        billsWindow?.window?.center()
+        billsWindow?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func preferenceSchemeChanged() {
@@ -1328,6 +1807,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         NSUserNotificationCenter.default.delegate = self
+        configureApplicationMenu()
         configureStatusItem()
         refresh(command: "status")
         let timer = DispatchSource.makeTimerSource(queue: .main)
@@ -1337,6 +1817,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         timer.resume()
         displayTimer = timer
+    }
+
+    private func configureApplicationMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appItem.submenu = appMenu
+        mainMenu.addItem(appItem)
+        appMenu.addItem(NSMenuItem(title: "Quit InvoiceTimer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+        editMenu.addItem(NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+
+        NSApp.mainMenu = mainMenu
     }
 
     private func configureStatusItem() {

@@ -39,8 +39,25 @@ module InvoiceCalculation
     raise ConfigError, "#{path} must be a number"
   end
 
+  def parse_monetary_input(value, path = "amount")
+    return decimal_value(value, path) unless value.is_a?(String)
+
+    text = value.strip
+    text = text.sub(/\A([+-]?)\s*(?:₹|INR)\s*/i, '\\1')
+    plain = /\A[+-]?\d+(?:\.\d+)?\z/
+    international = /\A[+-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?\z/
+    indian = /\A[+-]?\d{1,2}(?:,\d{2})*,\d{3}(?:\.\d+)?\z/
+    raise ConfigError, "#{path} must be a number" unless [plain, international, indian].any? { |pattern| text.match?(pattern) }
+
+    decimal_value(text.delete(","), path)
+  end
+
+  def format_monetary_value(value, path = "amount")
+    format("%.2f", parse_monetary_input(value, path).round(2, :half_up))
+  end
+
   def money(value)
-    decimal_value(value, "amount").round(2, :half_up)
+    parse_monetary_input(value, "amount").round(2, :half_up)
   end
 
   def parse_month(month_label)

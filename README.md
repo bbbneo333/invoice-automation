@@ -402,6 +402,19 @@ mark it filed in the dashboard. Filed periods are read-only, and filed IFF B2B
 rows are excluded from the quarterly GSTR-1; an IFF that was merely generated
 remains included.
 
+The dashboard also shows one **Input GST bills** row for each month in the
+selected quarter. **GST** is the total GST recorded from local purchase bills;
+**Effective GST** includes only bills manually marked **Found** after checking
+the GST portal. **Manage Bills** adds, edits, marks or deletes local records with
+a label, bill date, GST amount and total amount. These records are stored in
+`<outputDir>/gst-input-bills.json` and are not treated as portal evidence.
+Monetary inputs accept plain values, Indian or western comma grouping, and an
+optional `₹` or `INR` prefix; stored values are normalized to two decimals.
+
+The quarter estimate subtracts Effective GST from output GST. It intentionally
+does not include existing credit-ledger balances, PMT-06 deposits, reversals or
+other GSTR-3B adjustments, so it is a tracking estimate rather than a return.
+
 IFF JSON contains only the supported B2B invoice section. Quarterly GSTR-1
 includes B2B rows not already marked as filed through IFF, while its HSN summary
 and Documents Issued section cover all generated invoices in the quarter.
@@ -415,6 +428,8 @@ ruby src/time_log.rb generate-gst "December 2026"
 ruby src/time_log.rb mark-gstr1-filed "December 2026"
 ruby src/time_log.rb gst-dashboard
 ruby src/time_log.rb set-gst-preference "October 2026" qrmp enabled
+ruby src/time_log.rb gst-bills "October 2026"
+ruby src/time_log.rb add-gst-bill "October 2026" "Cloud hosting" 2026-10-04 18.00 118.00 missing
 ```
 
 The dashboard records local generation and user-confirmed portal filing. It

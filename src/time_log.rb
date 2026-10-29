@@ -798,7 +798,7 @@ if $PROGRAM_NAME == __FILE__
     end
   end
 
-  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|gst-dashboard|set-gst-preference|generate-gst|generate-iff|mark-iff-filed|mark-gstr1-filed [\"May 2026\"]") if command.nil?
+  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|gst-dashboard|gst-bills|add-gst-bill|update-gst-bill|delete-gst-bill|set-gst-preference|generate-gst|generate-iff|mark-iff-filed|mark-gstr1-filed [\"May 2026\"]") if command.nil?
 
   begin
     result = case command
@@ -812,6 +812,26 @@ if $PROGRAM_NAME == __FILE__
       TimeLog.storagePaths
     when "gst-dashboard"
       GstFiling.dashboard(TimeLog.load_config)
+    when "gst-bills"
+      GstInputTracker.month(TimeLog.load_config, month_label)
+    when "add-gst-bill"
+      abort("Usage: ruby src/time_log.rb add-gst-bill \"October 2026\" LABEL YYYY-MM-DD GST_AMOUNT TOTAL_AMOUNT [found|missing]") unless [5, 6].include?(ARGV.length)
+      bill_month, label, date, gst_amount, total_amount, bill_status = ARGV
+      GstInputTracker.add(
+        TimeLog.load_config, bill_month, label: label, date: date,
+        gst_amount: gst_amount, total_amount: total_amount, status: bill_status || "missing"
+      )
+    when "update-gst-bill"
+      abort("Usage: ruby src/time_log.rb update-gst-bill \"October 2026\" ID LABEL YYYY-MM-DD GST_AMOUNT TOTAL_AMOUNT found|missing") unless ARGV.length == 7
+      bill_month, id, label, date, gst_amount, total_amount, bill_status = ARGV
+      GstInputTracker.update(
+        TimeLog.load_config, bill_month, id, label: label, date: date,
+        gst_amount: gst_amount, total_amount: total_amount, status: bill_status
+      )
+    when "delete-gst-bill"
+      abort("Usage: ruby src/time_log.rb delete-gst-bill \"October 2026\" ID") unless ARGV.length == 2
+      bill_month, id = ARGV
+      GstInputTracker.delete(TimeLog.load_config, bill_month, id)
     when "set-gst-preference"
       abort("Usage: ruby src/time_log.rb set-gst-preference \"October 2026\" monthly|qrmp disabled|enabled") unless ARGV.length == 3
       quarter_period, scheme, iff = ARGV

@@ -5,6 +5,7 @@ require "json"
 require "time"
 require_relative "invoice_calculation"
 require_relative "invoice_store"
+require_relative "gst_input_tracker"
 
 module GstFiling
   ConfigError = InvoiceCalculation::ConfigError
@@ -271,20 +272,24 @@ module GstFiling
       snapshot = record["snapshot"]
       result << snapshot if snapshot.is_a?(Hash) && snapshot["version"] == 1 && snapshot.dig("gst", "enabled") == true
     end
-    quarter_starts = relevant_quarter_starts(snapshots, state, now)
+    quarter_starts = relevant_quarter_starts(config, snapshots, state, now)
     periods = quarter_starts.flat_map { |start_date| dashboard_quarter_periods(config, snapshots, state, now, start_date) }
     preferences = quarter_starts.map { |start_date| dashboard_preference(config, state, start_date) }
+    input_months = GstInputTracker.month_summaries(
+      config, quarter_starts.flat_map { |start_date| quarter(start_date).fetch("monthLabels") }
+    )
     configured = settings_from_state(config, state, now.to_date)
     {
       "scheme" => configured.fetch("scheme"),
       "iffEnabled" => configured.fetch("iff") == "enabled",
       "defaultPeriod" => default_dashboard_period(periods, now),
       "periods" => periods,
-      "preferences" => preferences
+      "preferences" => preferences,
+      "inputMonths" => input_months
     }
   end
 
-  def relevant_quarter_starts(snapshots, state, now)
+  def relevant_quarter_starts(config, snapshots, state, now)
     current = quarter(now.to_date)
     quarter_starts = snapshots.map { |snapshot| quarter(Date.iso8601(snapshot.fetch("invoiceDate"))).fetch("startDate") }
     quarter_starts << current.fetch("startDate")
@@ -296,6 +301,9 @@ module GstFiling
     end
     state.fetch("preferences").values.each do |entry|
       quarter_starts << quarter(entry.fetch("quarterStart")).fetch("startDate") if entry.is_a?(Hash) && entry["quarterStart"]
+    end
+    GstInputTracker.tracked_months(config).each do |month|
+      quarter_starts << quarter(month).fetch("startDate")
     end
     quarter_starts.uniq.sort.reverse
   end
