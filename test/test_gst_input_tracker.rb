@@ -57,11 +57,58 @@ class GstInputTrackerTest < Minitest::Test
     assert_equal 0, deleted.fetch("invoiceCount")
   end
 
+  def test_carries_missing_bill_forward_and_applies_credit_only_when_found
+    october = GstInputTracker.add(
+      @config, "October 2026", label: "Software", date: "2026-10-08",
+      gst_amount: "180", total_amount: "1180"
+    )
+    bill = october.fetch("bills").first
+
+    november = GstInputTracker.month(@config, "November 2026")
+    assert_equal 0, november.fetch("invoiceCount")
+    assert_equal 1, november.fetch("pendingCount")
+    assert_equal 0.0, november.fetch("effectiveGst")
+    assert november.fetch("bills").first.fetch("carriedForward")
+
+    january = GstInputTracker.update(
+      @config, "January 2027", bill.fetch("id"), label: "Software",
+      date: "2026-10-08", gst_amount: "180", total_amount: "1180",
+      status: "found", found_month: "January 2027"
+    )
+    assert_equal 0, january.fetch("invoiceCount")
+    assert_equal 1, january.fetch("carriedInCount")
+    assert_equal 0, january.fetch("pendingCount")
+    assert_equal 180.0, january.fetch("effectiveGst")
+    assert_equal "January 2027", january.fetch("bills").first.fetch("foundInMonth")
+
+    october = GstInputTracker.month(@config, "October 2026")
+    assert_equal 180.0, october.fetch("normalGst")
+    assert_equal 0.0, october.fetch("effectiveGst")
+    assert_equal 1, october.fetch("resolvedLaterCount")
+    assert_equal 0, october.fetch("missingCount")
+
+    dashboard = GstFiling.dashboard(@config, now: Time.local(2027, 1, 10, 9))
+    december = dashboard.fetch("periods").find { |period| period.fetch("month") == "December 2026" }
+    old_input = december.fetch("checklist").find { |item| item.fetch("id") == "input" }
+    assert_equal 0.0, old_input.fetch("effectiveInputGst")
+    assert_equal 1, old_input.fetch("resolvedLaterCount")
+    january_period = dashboard.fetch("periods").find { |period| period.fetch("month") == "January 2027" }
+    new_input = january_period.fetch("checklist").find { |item| item.fetch("id") == "input" }
+    assert_equal 180.0, new_input.fetch("effectiveInputGst")
+    assert_equal 1, new_input.fetch("carriedInCount")
+  end
+
   def test_validates_bill_month_and_amounts
     assert_raises(GstInputTracker::ConfigError) do
       GstInputTracker.add(
         @config, "October 2026", label: "Wrong month", date: "2026-11-01",
         gst_amount: "18", total_amount: "118"
+      )
+    end
+    assert_raises(GstInputTracker::ConfigError) do
+      GstInputTracker.add(
+        @config, "October 2026", label: "Reported too early", date: "2026-10-01",
+        gst_amount: "18", total_amount: "118", status: "found", found_month: "September 2026"
       )
     end
     assert_raises(GstInputTracker::ConfigError) do
@@ -118,9 +165,19 @@ class GstInputTrackerTest < Minitest::Test
     assert status.success?, stderr
     result = JSON.parse(stdout)
     assert_equal 1, result.fetch("missingCount")
+    id = result.fetch("bills").first.fetch("id")
 
     stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "gst-bills", "October 2026")
     assert status.success?, stderr
     assert_equal "Cloud hosting", JSON.parse(stdout).fetch("bills").first.fetch("label")
+
+    stdout, stderr, status = Open3.capture3(
+      environment, RbConfig.ruby, cli, "update-gst-bill", "January 2027", id,
+      "Cloud hosting", "2026-10-04", "18", "118", "found", "January 2027"
+    )
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    assert_equal 18.0, result.fetch("effectiveGst")
+    assert_equal 1, result.fetch("carriedInCount")
   end
 end

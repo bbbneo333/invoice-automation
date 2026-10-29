@@ -395,21 +395,47 @@ preference has been saved:
 }
 ```
 
-Open **GST Dashboard** from the menu-bar app to select a filing period, review
-invoice count, taxable value, output tax and total invoice value, and perform
-the applicable IFF or GSTR-1 action. After the GST portal confirms a filing,
-mark it filed in the dashboard. Filed periods are read-only, and filed IFF B2B
-rows are excluded from the quarterly GSTR-1; an IFF that was merely generated
-remains included.
+Open **GST Dashboard** from the menu-bar app and select a filing period. The
+dashboard presents a comprehensive action-first checklist: manage and match
+purchase bills, generate the applicable JSON, upload and file it on the GST
+portal, review the relevant liability or input credit, and complete PMT-06 or
+quarter-end GSTR-3B. Portal-only actions remain visible with the same relevant
+counts, GST amounts, estimated balance and standard due dates, and can be
+confirmed locally after completion. GST portal extensions take precedence over
+the displayed standard dates.
 
-The dashboard also shows one **Input GST bills** row for each month in the
-selected quarter. **GST** is the total GST recorded from local purchase bills;
-**Effective GST** includes only bills manually marked **Found** after checking
-the GST portal. **Manage Bills** adds, edits, marks or deletes local records with
-a label, bill date, GST amount and total amount. These records are stored in
-`<outputDir>/gst-input-bills.json` and are not treated as portal evidence.
+**Effective GST** includes eligible bills matched by an imported GSTR-2B, plus
+any exceptional bills explicitly confirmed with the manual override. **Manage
+Bills** adds, edits or deletes local records with a label, bill date, GST amount
+and total amount. Quarter-end reconciliation lets you choose which month of the
+quarter to manage. These records are stored in
+`<outputDir>/gst-input-bills.json`; the manual confirmation is only a local
+override and is not treated as portal evidence.
 Monetary inputs accept plain values, Indian or western comma grouping, and an
 optional `₹` or `INR` prefix; stored values are normalized to two decimals.
+
+A missing bill remains anchored to its original bill month and is shown as a
+carried-forward pending item in later periods. When a later GSTR-2B import
+matches it, its GST is included in Effective GST for the imported filing period,
+while the original month shows it as resolved later. This prevents a credit
+found in a later quarter from rewriting the Effective GST of an already
+completed quarter.
+
+The quarter-end checklist provides **Import GSTR-2B** when the statement is
+normally available. Download the JSON or XLSX from the GST portal and select it
+in the app. The importer validates the filing period, reads B2B invoices and
+matches them first by a previously stored portal document key, then by supplier
+GSTIN plus invoice number, and finally by the exact invoice date, total and GST.
+A unique match confirms the existing bill; an unmatched portal invoice is added
+to the local tracker; multiple possible matches are left for review. The result
+window shows portal, matched, added, ambiguous, locally missing, previous-period
+resolved and ITC totals. Ineligible GSTR-2B rows remain visible but do not enter
+Effective GST. Re-importing the same statement does not duplicate bills.
+
+For QRMP, GSTR-2B is reconciled once for the full quarter from the M3 checklist;
+under the current portal flow that quarterly statement is normally generated on
+the 14th after quarter end. The app therefore does not present an M1/M2 GSTR-2B
+import step.
 
 The quarter estimate subtracts Effective GST from output GST. It intentionally
 does not include existing credit-ledger balances, PMT-06 deposits, reversals or
@@ -424,17 +450,25 @@ The equivalent CLI commands are:
 ```sh
 ruby src/time_log.rb generate-iff "October 2026"
 ruby src/time_log.rb mark-iff-filed "October 2026"
+ruby src/time_log.rb mark-pmt06-reviewed "October 2026"
+ruby src/time_log.rb mark-pmt06-paid "October 2026"
 ruby src/time_log.rb generate-gst "December 2026"
 ruby src/time_log.rb mark-gstr1-filed "December 2026"
+ruby src/time_log.rb import-gstr2b "December 2026" /path/to/gstr2b.json
+ruby src/time_log.rb gstr2b-import "December 2026"
+ruby src/time_log.rb mark-gstr3b-reviewed "December 2026"
+ruby src/time_log.rb mark-gstr3b-filed "December 2026"
 ruby src/time_log.rb gst-dashboard
 ruby src/time_log.rb set-gst-preference "October 2026" qrmp enabled
 ruby src/time_log.rb gst-bills "October 2026"
 ruby src/time_log.rb add-gst-bill "October 2026" "Cloud hosting" 2026-10-04 18.00 118.00 missing
+ruby src/time_log.rb update-gst-bill "January 2027" BILL_ID "Cloud hosting" 2026-10-04 18.00 118.00 found "January 2027"
 ```
 
-The dashboard records local generation and user-confirmed portal filing. It
-does not upload to the GST portal, verify portal status, calculate PMT-06 after
-ITC, or file GSTR-3B.
+The dashboard records local generation and user-confirmed portal payment or
+filing. It does not upload to the GST portal, verify portal status, calculate
+the portal's final liability after ledger adjustments, make a PMT-06 payment,
+or file GSTR-3B.
 
 For monthly filing, omit `gstFiling` or use `scheme: "monthly"` with
 `iff: "disabled"`.

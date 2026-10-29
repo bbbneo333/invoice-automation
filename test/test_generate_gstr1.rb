@@ -357,6 +357,85 @@ class QrmpGenerationTest < Minitest::Test
     refute december.fetch("canGenerate"), "quarterly GSTR-1 stays unavailable before its third month"
   end
 
+  def test_dashboard_checklist_uses_action_titles_dynamic_values_due_dates_and_persisted_tasks
+    GstInputTracker.add(
+      @config, "October 2026", label: "Software", date: "2026-10-12",
+      gst_amount: "1,800.00", total_amount: "11,800.00", status: "found"
+    )
+    GstInputTracker.add(
+      @config, "October 2026", label: "Hosting", date: "2026-10-18",
+      gst_amount: "900", total_amount: "5,900", status: "missing"
+    )
+
+    dashboard = GstFiling.dashboard(@config, now: Time.local(2026, 10, 29, 9))
+    october = dashboard.fetch("periods").find { |period| period.fetch("month") == "October 2026" }
+    input = october.fetch("checklist").find { |item| item.fetch("id") == "input" }
+    assert_equal "Record and monitor October 2026 purchase bills", input.fetch("title")
+    assert_equal "attention", input.fetch("status")
+    assert_equal 2, input.fetch("invoiceCount")
+    assert_equal 1, input.fetch("foundCount")
+    assert_equal 1, input.fetch("missingCount")
+    assert_equal 2_700.0, input.fetch("gstAmount")
+    assert_equal 1_800.0, input.fetch("effectiveInputGst")
+
+    generate = october.fetch("checklist").find { |item| item.fetch("id") == "generate" }
+    assert_equal "Generate October 2026 IFF JSON", generate.fetch("title")
+    assert_equal "2026-11-13", generate.fetch("dueDate")
+    assert_equal 1, generate.fetch("invoiceCount")
+    assert_equal 65_141.8, generate.fetch("gstAmount")
+
+    payment_review = october.fetch("checklist").find { |item| item.fetch("id") == "paymentReview" }
+    assert_equal "Review October 2026 GST liability and generate the PMT-06 challan on the GST portal", payment_review.fetch("title")
+    assert_equal "ready", payment_review.fetch("status")
+    payment = october.fetch("checklist").find { |item| item.fetch("id") == "payment" }
+    assert_equal "Pay the October 2026 PMT-06 challan on the GST portal", payment.fetch("title")
+    assert_equal "2026-11-25", payment.fetch("dueDate")
+    assert_equal 63_341.8, payment.fetch("estimatedBalance")
+    assert_equal "blocked", payment.fetch("status")
+
+    GstFiling.mark_task_complete(@config, "October 2026", "pmt06_review", now: Time.utc(2026, 11, 19, 10))
+    GstFiling.mark_task_complete(@config, "October 2026", "pmt06", now: Time.utc(2026, 11, 20, 10))
+    refreshed = GstFiling.dashboard(@config, now: Time.local(2026, 11, 20, 12))
+    october = refreshed.fetch("periods").find { |period| period.fetch("month") == "October 2026" }
+    payment = october.fetch("checklist").find { |item| item.fetch("id") == "payment" }
+    assert_equal "complete", payment.fetch("status")
+    assert_equal "2026-11-20T10:00:00Z", payment.fetch("completedAt")
+    preference = refreshed.fetch("preferences").find { |item| item.fetch("quarterLabel") == "October-December 2026" }
+    assert preference.fetch("locked")
+    assert_includes preference.fetch("lockReason"), "checklist action"
+
+    december = dashboard.fetch("periods").find { |period| period.fetch("month") == "December 2026" }
+    assert_equal "Record and monitor October-December 2026 purchase bills", december.fetch("checklist").first.fetch("title")
+    gstr2b = december.fetch("checklist").find { |item| item.fetch("id") == "gstr2bImport" }
+    assert_equal "Import and reconcile October-December 2026 GSTR-2B", gstr2b.fetch("title")
+    assert_equal "2027-01-14", gstr2b.fetch("availableDate")
+    assert_equal "blocked", gstr2b.fetch("status")
+    gstr3b = december.fetch("checklist").find { |item| item.fetch("id") == "gstr3b" }
+    assert_equal "2027-01-24", gstr3b.fetch("dueDate")
+    assert_equal "blocked", gstr3b.fetch("status")
+    assert_equal 6, december.fetch("checklist").length
+  end
+
+  def test_checklist_rejects_tasks_that_do_not_apply_to_the_period
+    assert_raises(GstFiling::ConfigError) do
+      GstFiling.mark_task_complete(@config, "December 2026", "pmt06")
+    end
+    assert_raises(GstFiling::ConfigError) do
+      GstFiling.mark_task_complete(@config, "October 2026", "gstr3b")
+    end
+    assert_raises(GstFiling::ConfigError) do
+      GstFiling.mark_task_complete(@config, "November 2026", "pmt06")
+    end
+  end
+
+  def test_standard_gstr3b_due_date_uses_supplier_state_group
+    karnataka = { "from" => { "gst" => { "stateCode" => "29" } } }
+    rajasthan = { "from" => { "gst" => { "stateCode" => "08" } } }
+    assert_equal Date.new(2027, 1, 22), GstFiling.gstr3b_due_date(karnataka, "December 2026", [], quarterly: true)
+    assert_equal Date.new(2027, 1, 24), GstFiling.gstr3b_due_date(rajasthan, "December 2026", [], quarterly: true)
+    assert_equal Date.new(2026, 11, 20), GstFiling.gstr3b_due_date(karnataka, "October 2026", [], quarterly: false)
+  end
+
   def test_quarterly_gstr1_generated_and_filed_state_locks_regeneration_and_invoice
     path = Gstr1Generator.generate_quarterly("December 2026", config: @config)
     entry = GstFiling.gstr1_entry(@config, "December 2026")
@@ -401,6 +480,14 @@ class QrmpGenerationTest < Minitest::Test
     result = JSON.parse(stdout)
     assert_equal "filed", result.fetch("gstIffPeriods").first.fetch("status")
 
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-pmt06-reviewed", "October 2026")
+    assert status.success?, stderr
+    assert GstFiling.task_complete?(GstFiling.read_state(@config), "October 2026", "pmt06_review")
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-pmt06-paid", "October 2026")
+    assert status.success?, stderr
+    assert GstFiling.task_complete?(GstFiling.read_state(@config), "October 2026", "pmt06")
+
     stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "generate-gst", "December 2026")
     assert status.success?, stderr
     result = JSON.parse(stdout)
@@ -422,5 +509,38 @@ class QrmpGenerationTest < Minitest::Test
     stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-gstr1-filed", "December 2026")
     assert status.success?, stderr
     assert_equal "filed", GstFiling.gstr1_entry(@config, "December 2026").fetch("status")
+
+    gstr2b_path = File.join(@directory, "gstr2b.json")
+    InvoiceStore.write_json(gstr2b_path, {
+      "data" => {
+        "gstin" => "08AAAAA0000A1Z5", "fp" => "122026",
+        "docdata" => {
+          "b2b" => [{
+            "ctin" => "29SUPPLIER0001Z1", "trdnm" => "Supplier",
+            "inv" => [{
+              "inum" => "PUR-1", "dt" => "15-12-2026", "val" => 118,
+              "itcavl" => "Y", "items" => [{ "txval" => 100, "igst" => 18 }]
+            }]
+          }]
+        }
+      }
+    })
+    stdout, stderr, status = Open3.capture3(
+      environment, RbConfig.ruby, cli, "import-gstr2b", "December 2026", gstr2b_path
+    )
+    assert status.success?, stderr
+    assert_equal 1, JSON.parse(stdout).dig("summary", "portalInvoiceCount")
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "gstr2b-import", "December 2026")
+    assert status.success?, stderr
+    assert_equal "December 2026", JSON.parse(stdout).fetch("period")
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-gstr3b-reviewed", "December 2026")
+    assert status.success?, stderr
+    assert GstFiling.task_complete?(GstFiling.read_state(@config), "December 2026", "gstr3b_review")
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-gstr3b-filed", "December 2026")
+    assert status.success?, stderr
+    assert GstFiling.task_complete?(GstFiling.read_state(@config), "December 2026", "gstr3b")
   end
 end

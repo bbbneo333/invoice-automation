@@ -6,12 +6,14 @@ require "time"
 require_relative "invoice_calculation"
 require_relative "invoice_store"
 require_relative "gst_input_tracker"
+require_relative "gstr2b_importer"
 
 module GstFiling
   ConfigError = InvoiceCalculation::ConfigError
   SCHEMES = %w[monthly qrmp].freeze
   IFF_SETTINGS = %w[disabled enabled].freeze
   STATE_VERSION = 1
+  GSTR3B_DAY_22_STATE_CODES = %w[22 23 24 25 26 27 29 30 31 32 33 34 35 36 37].freeze
 
   module_function
 
@@ -89,13 +91,58 @@ module GstFiling
     raise ConfigError, "gst-filings.json has an unsupported format" unless state["gstr1"].is_a?(Hash)
     state["preferences"] ||= {}
     raise ConfigError, "gst-filings.json has an unsupported format" unless state["preferences"].is_a?(Hash)
+    state["tasks"] ||= {}
+    raise ConfigError, "gst-filings.json has an unsupported format" unless state["tasks"].is_a?(Hash)
     state
   rescue JSON::ParserError => error
     raise ConfigError, "Invalid gst-filings.json: #{error.message}"
   end
 
   def blank_state
-    { "version" => STATE_VERSION, "iff" => {}, "gstr1" => {}, "preferences" => {} }
+    { "version" => STATE_VERSION, "iff" => {}, "gstr1" => {}, "preferences" => {}, "tasks" => {} }
+  end
+
+  def mark_task_complete(config, month_label, task, now: Time.now.utc)
+    configured = settings(config, period: month_label)
+    valid = case task
+    when "pmt06_review", "pmt06"
+      configured.fetch("scheme") == "qrmp" && iff_eligible?(month_label)
+    when "gstr3b_review", "gstr3b"
+      configured.fetch("scheme") == "monthly" || !iff_eligible?(month_label)
+    else
+      false
+    end
+    raise ConfigError, "#{task} is not applicable to #{month_label}" unless valid
+
+    state = read_state(config)
+    if task == "pmt06" && !task_complete?(state, month_label, "pmt06_review")
+      raise ConfigError, "Review the #{month_label} GST liability before marking PMT-06 paid"
+    end
+    if task == "gstr3b_review"
+      raise ConfigError, "Mark GSTR-1 filed before reviewing GSTR-3B" unless gstr1_filed?(config, month_label)
+      raise ConfigError, "Import GSTR-2B before reviewing GSTR-3B" unless Gstr2bImporter.latest(config, month_label)
+    end
+    if task == "gstr3b"
+      raise ConfigError, "Mark GSTR-1 filed before marking GSTR-3B filed" unless gstr1_filed?(config, month_label)
+      raise ConfigError, "Import GSTR-2B before marking GSTR-3B filed" unless Gstr2bImporter.latest(config, month_label)
+      unless task_complete?(state, month_label, "gstr3b_review")
+        raise ConfigError, "Review the final GST balance before marking GSTR-3B filed"
+      end
+    end
+
+    update_state(config) do |state|
+      key = "#{period_key(month_label)}:#{task}"
+      state.fetch("tasks")[key] ||= {
+        "month" => month_label,
+        "task" => task,
+        "status" => "complete",
+        "completedAt" => now.iso8601
+      }
+    end.fetch("tasks").fetch("#{period_key(month_label)}:#{task}")
+  end
+
+  def task_complete?(state, month_label, task)
+    state.dig("tasks", "#{period_key(month_label)}:#{task}", "status") == "complete"
   end
 
   def set_preference(config, quarter_period, scheme, iff, now: Time.now.utc)
@@ -130,11 +177,20 @@ module GstFiling
   def preference_lock(state, details)
     keys = details.fetch("monthLabels").map { |month| period_key(month) }
     entries = keys.map { |key| state.fetch("iff")[key] }.compact + keys.map { |key| state.fetch("gstr1")[key] }.compact
+    completed_task = state.fetch("tasks", {}).values.any? do |entry|
+      entry.is_a?(Hash) && entry["month"] && details.fetch("monthLabels").include?(entry.fetch("month")) && entry["status"] == "complete"
+    end
     filed = entries.any? { |entry| entry["status"] == "filed" }
     generated = entries.any? { |entry| entry["status"] == "generated" }
     {
-      "locked" => filed || generated,
-      "reason" => filed ? "a filing is already marked filed" : generated ? "a GST JSON has already been generated" : nil
+      "locked" => filed || generated || completed_task,
+      "reason" => if filed
+        "a filing is already marked filed"
+      elsif generated
+        "a GST JSON has already been generated"
+      elsif completed_task
+        "a GST checklist action is already marked complete"
+      end
     }
   end
 
@@ -268,16 +324,19 @@ module GstFiling
 
   def dashboard(config, now: Time.now)
     state = read_state(config)
+    gstr2b_imports = Gstr2bImporter.read_state(config).fetch("imports")
     snapshots = InvoiceStore.new(config).records.each_with_object([]) do |record, result|
       snapshot = record["snapshot"]
       result << snapshot if snapshot.is_a?(Hash) && snapshot["version"] == 1 && snapshot.dig("gst", "enabled") == true
     end
     quarter_starts = relevant_quarter_starts(config, snapshots, state, now)
-    periods = quarter_starts.flat_map { |start_date| dashboard_quarter_periods(config, snapshots, state, now, start_date) }
-    preferences = quarter_starts.map { |start_date| dashboard_preference(config, state, start_date) }
     input_months = GstInputTracker.month_summaries(
       config, quarter_starts.flat_map { |start_date| quarter(start_date).fetch("monthLabels") }
     )
+    periods = quarter_starts.flat_map do |start_date|
+      dashboard_quarter_periods(config, snapshots, state, now, start_date, input_months, gstr2b_imports)
+    end
+    preferences = quarter_starts.map { |start_date| dashboard_preference(config, state, start_date) }
     configured = settings_from_state(config, state, now.to_date)
     {
       "scheme" => configured.fetch("scheme"),
@@ -305,6 +364,9 @@ module GstFiling
     GstInputTracker.tracked_months(config).each do |month|
       quarter_starts << quarter(month).fetch("startDate")
     end
+    Gstr2bImporter.tracked_periods(config).each do |month|
+      quarter_starts << quarter(month).fetch("startDate")
+    end
     quarter_starts.uniq.sort.reverse
   end
 
@@ -322,31 +384,32 @@ module GstFiling
     }
   end
 
-  def dashboard_quarter_periods(config, snapshots, state, now, start_date)
+  def dashboard_quarter_periods(config, snapshots, state, now, start_date, input_months, gstr2b_imports)
     details = quarter(start_date)
     configured = settings_from_state(config, state, start_date)
     now_month = Date.new(now.year, now.month, 1)
     details.fetch("months").each_with_index.map do |month, index|
       month_label = month.strftime("%B %Y")
+      gstr2b_entry = gstr2b_imports[period_key(month_label)]
       if configured.fetch("scheme") == "qrmp" && index < 2
         selected = snapshots_in_month(snapshots, month)
         entry = state.fetch("iff")[period_key(month_label)]
         dashboard_period(
-          config, month_label, details.fetch("label"), "iff", entry, selected, configured,
+          config, month_label, details.fetch("label"), "iff", entry, selected, configured, state, input_months, gstr2b_entry, now,
           action_title: "IFF", can_generate: configured.fetch("iff") == "enabled" && month <= now_month && !selected.empty?
         )
       elsif configured.fetch("scheme") == "qrmp"
         selected = snapshots.select { |snapshot| (details.fetch("startDate")..details.fetch("endDate")).cover?(Date.iso8601(snapshot.fetch("invoiceDate"))) }
         entry = state.fetch("gstr1")[period_key(month_label)]
         dashboard_period(
-          config, month_label, details.fetch("label"), "quarterlyGstr1", entry, selected, configured,
+          config, month_label, details.fetch("label"), "quarterlyGstr1", entry, selected, configured, state, input_months, gstr2b_entry, now,
           action_title: "Quarterly GSTR-1", can_generate: month <= now_month && !selected.empty?
         )
       else
         selected = snapshots_in_month(snapshots, month)
         entry = state.fetch("gstr1")[period_key(month_label)]
         dashboard_period(
-          config, month_label, details.fetch("label"), "monthlyGstr1", entry, selected, configured,
+          config, month_label, details.fetch("label"), "monthlyGstr1", entry, selected, configured, state, input_months, gstr2b_entry, now,
           action_title: "GSTR-1", can_generate: month <= now_month && !selected.empty?
         )
       end
@@ -360,10 +423,10 @@ module GstFiling
     end
   end
 
-  def dashboard_period(config, month_label, quarter_label, kind, entry, snapshots, configured, action_title:, can_generate:)
+  def dashboard_period(config, month_label, quarter_label, kind, entry, snapshots, configured, state, input_months, gstr2b_entry, now, action_title:, can_generate:)
     status = entry&.fetch("status", nil) || "pending"
     validate_entry_snapshots!(config, entry) if status == "filed"
-    {
+    period = {
       "month" => month_label,
       "quarterLabel" => quarter_label,
       "scheme" => configured.fetch("scheme"),
@@ -379,6 +442,188 @@ module GstFiling
       "amounts" => dashboard_amounts(snapshots),
       "invoices" => snapshots.sort_by { |snapshot| Date.iso8601(snapshot.fetch("invoiceDate")) }.map { |snapshot| dashboard_invoice(snapshot) }
     }
+    period["checklist"] = dashboard_checklist(config, period, snapshots, state, input_months, gstr2b_entry, now)
+    period
+  end
+
+  def dashboard_checklist(config, period, snapshots, state, input_months, gstr2b_entry, now)
+    month_label = period.fetch("month")
+    quarterly = period.fetch("kind") == "quarterlyGstr1"
+    relevant_inputs = if quarterly
+      input_months.select { |summary| summary.fetch("quarterLabel") == period.fetch("quarterLabel") }
+    else
+      input_months.select { |summary| summary.fetch("month") == month_label }
+    end
+    input = combine_input_summaries(relevant_inputs)
+    input_title = quarterly ? "Record and monitor #{period.fetch('quarterLabel')} purchase bills" : "Record and monitor #{month_label} purchase bills"
+    input_status = if input.fetch("invoiceCount").zero? && input.fetch("carriedInCount").zero? && input.fetch("missingCount").zero?
+      "pending"
+    elsif input.fetch("missingCount").zero?
+      "complete"
+    else
+      "attention"
+    end
+
+    due_date = return_due_date(period.fetch("kind"), month_label)
+    generate_status = period.fetch("status") == "pending" ? (period.fetch("canGenerate") ? "ready" : "blocked") : "complete"
+    file_status = period.fetch("status") == "filed" ? "complete" : (period.fetch("status") == "generated" ? "ready" : "blocked")
+    return_label = period.fetch("kind") == "iff" ? "#{month_label} IFF" : (quarterly ? "#{period.fetch('quarterLabel')} GSTR-1" : "#{month_label} GSTR-1")
+    items = [
+      {
+        "id" => "input",
+        "title" => input_title,
+        "status" => input_status,
+        "action" => "manageBills",
+        "invoiceCount" => input.fetch("invoiceCount"),
+        "foundCount" => input.fetch("foundCount"),
+        "missingCount" => input.fetch("missingCount"),
+        "carriedInCount" => input.fetch("carriedInCount"),
+        "resolvedLaterCount" => input.fetch("resolvedLaterCount"),
+        "ineligibleCount" => input.fetch("ineligibleCount"),
+        "gstAmount" => input.fetch("normalGst"),
+        "effectiveInputGst" => input.fetch("effectiveGst")
+      },
+      {
+        "id" => "generate",
+        "title" => "Generate #{return_label} JSON",
+        "status" => generate_status,
+        "action" => period.fetch("status") == "pending" ? "generate" : "viewJson",
+        "dueDate" => due_date&.iso8601,
+        "invoiceCount" => period.dig("amounts", "invoiceCount"),
+        "taxableValue" => period.dig("amounts", "taxableValue"),
+        "gstAmount" => period.dig("amounts", "outputTax")
+      },
+      {
+        "id" => "file",
+        "title" => "Upload and file #{return_label} on the GST portal",
+        "status" => file_status,
+        "action" => "markFiled",
+        "dueDate" => due_date&.iso8601,
+        "generatedAt" => period["generatedAt"],
+        "completedAt" => period["filedAt"]
+      }
+    ]
+
+    output_tax = period.dig("amounts", "outputTax")
+    estimated_balance = (output_tax - input.fetch("effectiveGst")).round(2)
+    if period.fetch("kind") == "iff"
+      payment_complete = task_complete?(state, month_label, "pmt06")
+      review_complete = payment_complete || task_complete?(state, month_label, "pmt06_review")
+      items << {
+        "id" => "paymentReview",
+        "title" => "Review #{month_label} GST liability and generate the PMT-06 challan on the GST portal",
+        "status" => review_complete ? "complete" : "ready",
+        "action" => "markPmt06Reviewed",
+        "dueDate" => payment_due_date(month_label).iso8601,
+        "gstAmount" => output_tax,
+        "effectiveInputGst" => input.fetch("effectiveGst"),
+        "estimatedBalance" => estimated_balance,
+        "completedAt" => state.dig("tasks", "#{period_key(month_label)}:pmt06_review", "completedAt")
+      }
+      items << {
+        "id" => "payment",
+        "title" => "Pay the #{month_label} PMT-06 challan on the GST portal",
+        "status" => payment_complete ? "complete" : (review_complete ? "ready" : "blocked"),
+        "action" => "markPmt06Paid",
+        "dueDate" => payment_due_date(month_label).iso8601,
+        "gstAmount" => output_tax,
+        "effectiveInputGst" => input.fetch("effectiveGst"),
+        "estimatedBalance" => estimated_balance,
+        "completedAt" => state.dig("tasks", "#{period_key(month_label)}:pmt06", "completedAt")
+      }
+    elsif quarterly || period.fetch("kind") == "monthlyGstr1"
+      filing_complete = task_complete?(state, month_label, "gstr3b")
+      review_complete = filing_complete || task_complete?(state, month_label, "gstr3b_review")
+      return_filed = period.fetch("status") == "filed"
+      gstr2b_available = gstr2b_available_date(month_label)
+      gstr2b_complete = !gstr2b_entry.nil?
+      gstr2b_summary = gstr2b_entry&.fetch("summary", {}) || {}
+      gstr2b_label = quarterly ? period.fetch("quarterLabel") : month_label
+      gstr2b_item = {
+        "id" => "gstr2bImport",
+        "title" => "Import and reconcile #{gstr2b_label} GSTR-2B",
+        "status" => gstr2b_complete ? "complete" : (now.to_date >= gstr2b_available ? "ready" : "blocked"),
+        "action" => gstr2b_complete ? "viewGstr2b" : "importGstr2b",
+        "availableDate" => gstr2b_available.iso8601,
+        "completedAt" => gstr2b_entry && gstr2b_entry["importedAt"]
+      }
+      gstr2b_item.merge!({
+        "portalInvoiceCount" => gstr2b_summary.fetch("portalInvoiceCount", 0),
+        "matchedCount" => gstr2b_summary.fetch("matchedCount", 0),
+        "importedCount" => gstr2b_summary.fetch("importedCount", 0),
+        "ambiguousCount" => gstr2b_summary.fetch("ambiguousCount", 0),
+        "missingLocalCount" => gstr2b_summary.fetch("missingLocalCount", 0),
+        "previousBillsResolvedCount" => gstr2b_summary.fetch("previousBillsResolvedCount", 0),
+        "gstAmount" => gstr2b_summary.fetch("portalGst", 0),
+        "effectiveInputGst" => gstr2b_summary.fetch("representedGst", 0)
+      }) if gstr2b_complete
+      items << gstr2b_item
+      items << {
+        "id" => "gstr3bReview",
+        "title" => quarterly ? "Review GSTR-2B credit and the final GSTR-3B balance on the GST portal" : "Review input credit and the final GSTR-3B balance on the GST portal",
+        "status" => review_complete ? "complete" : (return_filed && gstr2b_complete ? "ready" : "blocked"),
+        "action" => "markGstr3bReviewed",
+        "dueDate" => gstr3b_due_date(config, month_label, snapshots, quarterly: quarterly)&.iso8601,
+        "gstAmount" => output_tax,
+        "effectiveInputGst" => input.fetch("effectiveGst"),
+        "estimatedBalance" => estimated_balance,
+        "completedAt" => state.dig("tasks", "#{period_key(month_label)}:gstr3b_review", "completedAt")
+      }
+      items << {
+        "id" => "gstr3b",
+        "title" => "Pay any remaining balance and file GSTR-3B on the GST portal",
+        "status" => filing_complete ? "complete" : (return_filed && gstr2b_complete && review_complete ? "ready" : "blocked"),
+        "action" => "markGstr3bFiled",
+        "dueDate" => gstr3b_due_date(config, month_label, snapshots, quarterly: quarterly)&.iso8601,
+        "gstAmount" => output_tax,
+        "effectiveInputGst" => input.fetch("effectiveGst"),
+        "estimatedBalance" => estimated_balance,
+        "completedAt" => state.dig("tasks", "#{period_key(month_label)}:gstr3b", "completedAt")
+      }
+    end
+    items
+  end
+
+  def combine_input_summaries(summaries)
+    latest = summaries.max_by { |summary| month_start(summary.fetch("month")) }
+    {
+      "normalGst" => summaries.sum { |summary| summary.fetch("normalGst") }.round(2),
+      "effectiveGst" => summaries.sum { |summary| summary.fetch("effectiveGst") }.round(2),
+      "invoiceCount" => summaries.sum { |summary| summary.fetch("invoiceCount") },
+      "foundCount" => summaries.sum { |summary| summary.fetch("foundCount") },
+      "missingCount" => latest&.fetch("pendingCount", 0) || 0,
+      "carriedInCount" => summaries.sum { |summary| summary.fetch("carriedInCount", 0) },
+      "resolvedLaterCount" => summaries.sum { |summary| summary.fetch("resolvedLaterCount", 0) },
+      "ineligibleCount" => summaries.sum { |summary| summary.fetch("ineligibleCount", 0) }
+    }
+  end
+
+  def return_due_date(kind, month_label)
+    month = month_start(month_label) >> 1
+    Date.new(month.year, month.month, kind == "monthlyGstr1" ? 11 : 13)
+  end
+
+  def payment_due_date(month_label)
+    month = month_start(month_label) >> 1
+    Date.new(month.year, month.month, 25)
+  end
+
+  def gstr2b_available_date(month_label)
+    month = month_start(month_label) >> 1
+    Date.new(month.year, month.month, 14)
+  end
+
+  def gstr3b_due_date(config, month_label, snapshots, quarterly:)
+    month = month_start(month_label) >> 1
+    return Date.new(month.year, month.month, 20) unless quarterly
+
+    configured_state_code = config.dig("from", "gst", "stateCode")
+    snapshot_state_codes = snapshots.map { |snapshot| snapshot.dig("supplier", "gst", "stateCode") }.compact.uniq
+    state_code = configured_state_code || (snapshot_state_codes.first if snapshot_state_codes.length == 1)
+    return nil unless state_code
+
+    day = GSTR3B_DAY_22_STATE_CODES.include?(state_code.to_s.rjust(2, "0")) ? 22 : 24
+    Date.new(month.year, month.month, day)
   end
 
   def dashboard_invoice(snapshot)
