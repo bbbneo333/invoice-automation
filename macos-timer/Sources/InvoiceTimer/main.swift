@@ -15,6 +15,66 @@ struct ReimbursementEntry: Decodable {
     let attachment: String?
 }
 
+struct GstIffPeriod: Decodable {
+    let month: String
+    let status: String
+}
+
+struct GstDashboard: Decodable {
+    let scheme: String
+    let iffEnabled: Bool
+    let defaultPeriod: String?
+    let periods: [GstDashboardPeriod]
+    let preferences: [GstDashboardPreference]
+}
+
+struct GstDashboardPreference: Decodable {
+    let quarterStartMonth: String
+    let quarterLabel: String
+    let scheme: String
+    let iffEnabled: Bool
+    let locked: Bool
+    let lockReason: String?
+}
+
+struct GstDashboardPeriod: Decodable {
+    let month: String
+    let quarterLabel: String
+    let scheme: String
+    let iffEnabled: Bool
+    let kind: String
+    let actionTitle: String
+    let status: String
+    let locked: Bool
+    let canGenerate: Bool
+    let outputPath: String?
+    let generatedAt: String?
+    let filedAt: String?
+    let amounts: GstDashboardAmounts
+    let invoices: [GstDashboardInvoice]
+}
+
+struct GstDashboardAmounts: Decodable {
+    let invoiceCount: Int
+    let taxableValue: Double
+    let igst: Double
+    let cgst: Double
+    let sgst: Double
+    let utgst: Double
+    let cess: Double
+    let outputTax: Double
+    let invoiceValue: Double
+}
+
+struct GstDashboardInvoice: Decodable {
+    let number: String
+    let date: String
+    let customer: String
+    let taxableValue: Double
+    let taxTotal: Double
+    let totalValue: Double
+}
+
 struct TimeLogStatus: Decodable {
     let projectLabel: String
     let projectConfigPath: String
@@ -50,6 +110,13 @@ struct TimeLogStatus: Decodable {
     let outputDir: String
     let currentReimbursements: [ReimbursementEntry]
     let previousReimbursements: [ReimbursementEntry]
+    let gstFilingScheme: String
+    let gstIffEnabled: Bool
+    let gstQuarterLabel: String
+    let gstQuarterEndMonth: String
+    let gstPreviousQuarterLabel: String
+    let gstPreviousQuarterEndMonth: String
+    let gstIffPeriods: [GstIffPeriod]
 }
 
 struct DailyHours: Decodable {
@@ -252,6 +319,11 @@ final class TimeLogClient {
     func dailyHours(month: String? = nil) throws -> DailyHours {
         let output = try runData("daily-hours", month.map { [$0] } ?? [])
         return try JSONDecoder().decode(DailyHours.self, from: output)
+    }
+
+    func gstDashboard() throws -> GstDashboard {
+        let output = try runData("gst-dashboard")
+        return try JSONDecoder().decode(GstDashboard.self, from: output)
     }
 
     func setDay(month: String? = nil, date: String, source: String, actualHours: String = "", billedHours: String = "", note: String = "") throws -> DailyHours {
@@ -819,6 +891,423 @@ final class DailyHoursWindowController: NSWindowController, NSTableViewDataSourc
 }
 
 @MainActor
+final class GstDashboardWindowController: NSWindowController {
+    private let client = TimeLogClient()
+    private var dashboard: GstDashboard?
+    private var selectedMonth: String?
+    private var isWorking = false
+
+    private let periodMenu = NSPopUpButton()
+    private let schemeLabel = NSTextField(labelWithString: "")
+    private let filingSchemeMenu = NSPopUpButton()
+    private let iffCheckbox = NSButton(checkboxWithTitle: "Use IFF in the first two months", target: nil, action: nil)
+    private let savePreferenceButton = NSButton(title: "Save Preference", target: nil, action: nil)
+    private let preferenceNoteLabel = NSTextField(wrappingLabelWithString: "")
+    private let titleLabel = NSTextField(labelWithString: "GST Filing")
+    private let statusLabel = NSTextField(labelWithString: "")
+    private let invoicesLabel = NSTextField(wrappingLabelWithString: "")
+    private let countValue = NSTextField(labelWithString: "—")
+    private let taxableValue = NSTextField(labelWithString: "—")
+    private let taxValue = NSTextField(labelWithString: "—")
+    private let invoiceValue = NSTextField(labelWithString: "—")
+    private let taxBreakdownLabel = NSTextField(wrappingLabelWithString: "")
+    private let messageLabel = NSTextField(wrappingLabelWithString: "")
+    private let generateButton = NSButton(title: "Generate", target: nil, action: nil)
+    private let viewButton = NSButton(title: "View JSON", target: nil, action: nil)
+    private let filedButton = NSButton(title: "Mark as Filed", target: nil, action: nil)
+
+    convenience init() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 650, height: 560),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "GST Dashboard"
+        window.minSize = NSSize(width: 600, height: 520)
+        self.init(window: window)
+        buildUI()
+        reload()
+    }
+
+    func refresh() {
+        reload()
+    }
+
+    private func buildUI() {
+        guard let contentView = window?.contentView else { return }
+
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.alignment = .leading
+        root.spacing = 14
+        root.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 20),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -20)
+        ])
+
+        let top = NSStackView()
+        top.orientation = .horizontal
+        top.alignment = .centerY
+        top.spacing = 8
+        titleLabel.font = .systemFont(ofSize: 22, weight: .semibold)
+        top.addArrangedSubview(titleLabel)
+        let topSpacer = NSView()
+        topSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        top.addArrangedSubview(topSpacer)
+        top.addArrangedSubview(NSTextField(labelWithString: "Period"))
+        periodMenu.target = self
+        periodMenu.action = #selector(periodChanged)
+        periodMenu.widthAnchor.constraint(greaterThanOrEqualToConstant: 190).isActive = true
+        top.addArrangedSubview(periodMenu)
+        let refreshButton = NSButton(title: "Refresh", target: self, action: #selector(refreshClicked))
+        top.addArrangedSubview(refreshButton)
+        root.addArrangedSubview(top)
+        top.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        schemeLabel.textColor = .secondaryLabelColor
+        root.addArrangedSubview(schemeLabel)
+
+        let preferenceBar = NSStackView()
+        preferenceBar.orientation = .horizontal
+        preferenceBar.alignment = .centerY
+        preferenceBar.spacing = 10
+        preferenceBar.addArrangedSubview(NSTextField(labelWithString: "Filing preference"))
+        filingSchemeMenu.addItems(withTitles: ["Monthly", "QRMP"])
+        filingSchemeMenu.target = self
+        filingSchemeMenu.action = #selector(preferenceSchemeChanged)
+        preferenceBar.addArrangedSubview(filingSchemeMenu)
+        iffCheckbox.target = self
+        iffCheckbox.action = #selector(preferenceIffChanged)
+        preferenceBar.addArrangedSubview(iffCheckbox)
+        savePreferenceButton.target = self
+        savePreferenceButton.action = #selector(savePreference)
+        preferenceBar.addArrangedSubview(savePreferenceButton)
+        root.addArrangedSubview(preferenceBar)
+
+        preferenceNoteLabel.textColor = .secondaryLabelColor
+        root.addArrangedSubview(preferenceNoteLabel)
+        preferenceNoteLabel.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        statusLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        root.addArrangedSubview(statusLabel)
+
+        for label in [countValue, taxableValue, taxValue, invoiceValue] {
+            label.alignment = .right
+            label.font = .monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        }
+        let summary = NSGridView(views: [
+            [NSTextField(labelWithString: "Invoices"), countValue],
+            [NSTextField(labelWithString: "Taxable value"), taxableValue],
+            [NSTextField(labelWithString: "Output tax on invoices"), taxValue],
+            [NSTextField(labelWithString: "Total invoice value"), invoiceValue]
+        ])
+        summary.rowSpacing = 8
+        summary.columnSpacing = 32
+        summary.column(at: 0).xPlacement = .leading
+        summary.column(at: 1).xPlacement = .trailing
+        root.addArrangedSubview(summary)
+        summary.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        taxBreakdownLabel.textColor = .secondaryLabelColor
+        root.addArrangedSubview(taxBreakdownLabel)
+
+        let separator = NSBox()
+        separator.boxType = .separator
+        root.addArrangedSubview(separator)
+        separator.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        let invoicesTitle = NSTextField(labelWithString: "Invoices in this filing view")
+        invoicesTitle.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        root.addArrangedSubview(invoicesTitle)
+        invoicesLabel.maximumNumberOfLines = 8
+        root.addArrangedSubview(invoicesLabel)
+        invoicesLabel.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        let flexibleSpace = NSView()
+        flexibleSpace.setContentHuggingPriority(.defaultLow, for: .vertical)
+        root.addArrangedSubview(flexibleSpace)
+
+        messageLabel.textColor = .secondaryLabelColor
+        root.addArrangedSubview(messageLabel)
+        messageLabel.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        let actions = NSStackView()
+        actions.orientation = .horizontal
+        actions.alignment = .centerY
+        actions.spacing = 10
+        generateButton.target = self
+        generateButton.action = #selector(generateSelected)
+        viewButton.target = self
+        viewButton.action = #selector(viewSelected)
+        filedButton.target = self
+        filedButton.action = #selector(markSelectedFiled)
+        actions.addArrangedSubview(generateButton)
+        actions.addArrangedSubview(viewButton)
+        actions.addArrangedSubview(filedButton)
+        root.addArrangedSubview(actions)
+    }
+
+    private var selectedPeriod: GstDashboardPeriod? {
+        guard let periods = dashboard?.periods, !periods.isEmpty else { return nil }
+        let index = periodMenu.indexOfSelectedItem
+        guard periods.indices.contains(index) else { return periods.first }
+        return periods[index]
+    }
+
+    private var selectedPreference: GstDashboardPreference? {
+        guard let quarterLabel = selectedPeriod?.quarterLabel else { return nil }
+        return dashboard?.preferences.first { $0.quarterLabel == quarterLabel }
+    }
+
+    private func reload() {
+        do {
+            let previous = selectedMonth
+            dashboard = try client.gstDashboard()
+            let target = previous ?? dashboard?.defaultPeriod
+            periodMenu.removeAllItems()
+            for period in dashboard?.periods ?? [] {
+                let suffix = period.status == "filed" ? " — Filed" : period.status == "generated" ? " — Generated" : ""
+                periodMenu.addItem(withTitle: "\(period.month)\(suffix)")
+            }
+            if let target, let index = dashboard?.periods.firstIndex(where: { $0.month == target }) {
+                periodMenu.selectItem(at: index)
+            }
+            selectedMonth = selectedPeriod?.month
+            messageLabel.stringValue = ""
+            render()
+        } catch {
+            messageLabel.textColor = .systemRed
+            messageLabel.stringValue = error.localizedDescription
+            setActionsEnabled(false)
+        }
+    }
+
+    private func render() {
+        guard dashboard != nil, let period = selectedPeriod else {
+            schemeLabel.stringValue = "No GST filing periods are available."
+            statusLabel.stringValue = ""
+            invoicesLabel.stringValue = "No generated GST invoices."
+            setActionsEnabled(false)
+            return
+        }
+
+        selectedMonth = period.month
+        schemeLabel.stringValue = "\(period.quarterLabel) · Local preference only; this does not change the GST portal"
+        renderPreference()
+        statusLabel.stringValue = statusText(period)
+        countValue.stringValue = "\(period.amounts.invoiceCount)"
+        taxableValue.stringValue = money(period.amounts.taxableValue)
+        taxValue.stringValue = money(period.amounts.outputTax)
+        invoiceValue.stringValue = money(period.amounts.invoiceValue)
+        taxBreakdownLabel.stringValue = taxBreakdown(period.amounts)
+        invoicesLabel.stringValue = period.invoices.isEmpty
+            ? "No generated GST invoice is dated in this filing period."
+            : period.invoices.map { invoice in
+                "Invoice \(invoice.number) · \(displayDate(invoice.date)) · \(invoice.customer) · \(money(invoice.totalValue))"
+            }.joined(separator: "\n")
+
+        generateButton.title = period.status == "generated" ? "Regenerate \(period.actionTitle)" : "Generate \(period.actionTitle)"
+        generateButton.isEnabled = !isWorking && period.canGenerate
+        viewButton.isEnabled = !isWorking && period.outputPath.map { FileManager.default.fileExists(atPath: $0) } == true
+        filedButton.title = "Mark \(period.actionTitle) as Filed"
+        filedButton.isEnabled = !isWorking && period.status == "generated"
+        filedButton.isHidden = period.status == "filed"
+        periodMenu.isEnabled = !isWorking
+    }
+
+    private func renderPreference() {
+        guard let preference = selectedPreference else {
+            filingSchemeMenu.isEnabled = false
+            iffCheckbox.isEnabled = false
+            savePreferenceButton.isEnabled = false
+            preferenceNoteLabel.stringValue = ""
+            return
+        }
+
+        filingSchemeMenu.selectItem(at: preference.scheme == "qrmp" ? 1 : 0)
+        iffCheckbox.state = preference.iffEnabled ? .on : .off
+        let editable = !isWorking && !preference.locked
+        filingSchemeMenu.isEnabled = editable
+        iffCheckbox.isEnabled = editable && preference.scheme == "qrmp"
+        savePreferenceButton.isEnabled = editable
+        if preference.locked {
+            preferenceNoteLabel.stringValue = "Preference locked: \(preference.lockReason ?? "GST filing activity already exists for this quarter")."
+        } else {
+            preferenceNoteLabel.stringValue = "Later quarters inherit this preference until you save a different one."
+        }
+    }
+
+    private func statusText(_ period: GstDashboardPeriod) -> String {
+        switch period.status {
+        case "filed":
+            return "✓ \(period.actionTitle) filed on the GST portal · Read-only"
+        case "generated":
+            return "\(period.actionTitle) JSON generated · Portal filing not yet confirmed"
+        default:
+            if period.canGenerate {
+                return "\(period.actionTitle) is ready to generate"
+            }
+            if period.kind == "quarterlyGstr1", period.amounts.invoiceCount > 0 {
+                return "Quarterly GSTR-1 becomes available in \(period.month)"
+            }
+            if period.kind == "iff", period.iffEnabled == false {
+                return "IFF is disabled in project configuration"
+            }
+            return "Waiting for a generated invoice for this period"
+        }
+    }
+
+    private func taxBreakdown(_ amounts: GstDashboardAmounts) -> String {
+        let values: [(String, Double)] = [
+            ("IGST", amounts.igst), ("CGST", amounts.cgst), ("SGST", amounts.sgst),
+            ("UTGST", amounts.utgst), ("Cess", amounts.cess)
+        ]
+        let visible = values.filter { abs($0.1) > 0.004 }.map { "\($0.0) \(money($0.1))" }
+        return visible.isEmpty ? "No output tax in generated invoices" : visible.joined(separator: "  ·  ")
+    }
+
+    private func money(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale(identifier: "en_IN")
+        formatter.currencyCode = "INR"
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "₹%.2f", value)
+    }
+
+    private func displayDate(_ isoDate: String) -> String {
+        let input = DateFormatter()
+        input.locale = Locale(identifier: "en_US_POSIX")
+        input.dateFormat = "yyyy-MM-dd"
+        guard let date = input.date(from: isoDate) else { return isoDate }
+        let output = DateFormatter()
+        output.locale = Locale(identifier: "en_IN")
+        output.dateFormat = "d MMM yyyy"
+        return output.string(from: date)
+    }
+
+    private func setActionsEnabled(_ enabled: Bool) {
+        generateButton.isEnabled = enabled
+        viewButton.isEnabled = enabled
+        filedButton.isEnabled = enabled
+        periodMenu.isEnabled = enabled
+        filingSchemeMenu.isEnabled = enabled
+        iffCheckbox.isEnabled = enabled
+        savePreferenceButton.isEnabled = enabled
+    }
+
+    @objc private func periodChanged() {
+        selectedMonth = selectedPeriod?.month
+        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.stringValue = ""
+        render()
+    }
+
+    @objc private func preferenceSchemeChanged() {
+        let qrmp = filingSchemeMenu.indexOfSelectedItem == 1
+        if !qrmp {
+            iffCheckbox.state = .off
+        }
+        iffCheckbox.isEnabled = qrmp && selectedPreference?.locked == false && !isWorking
+    }
+
+    @objc private func preferenceIffChanged() {
+        // The value is persisted only when Save Preference is clicked.
+    }
+
+    @objc private func savePreference() {
+        guard let preference = selectedPreference, !preference.locked, !isWorking else { return }
+        let scheme = filingSchemeMenu.indexOfSelectedItem == 1 ? "qrmp" : "monthly"
+        let iff = scheme == "qrmp" && iffCheckbox.state == .on ? "enabled" : "disabled"
+        isWorking = true
+        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.stringValue = "Saving filing preference…"
+        render()
+
+        Task.detached {
+            do {
+                _ = try TimeLogClient().run("set-gst-preference", [preference.quarterStartMonth, scheme, iff])
+                await MainActor.run {
+                    self.isWorking = false
+                    self.reload()
+                    self.messageLabel.textColor = .secondaryLabelColor
+                    self.messageLabel.stringValue = "Filing preference saved"
+                }
+            } catch {
+                await MainActor.run {
+                    self.isWorking = false
+                    self.messageLabel.textColor = .systemRed
+                    self.messageLabel.stringValue = error.localizedDescription
+                    self.render()
+                }
+            }
+        }
+    }
+
+    @objc private func refreshClicked() {
+        reload()
+    }
+
+    @objc private func generateSelected() {
+        guard let period = selectedPeriod, period.canGenerate else { return }
+        let command = period.kind == "iff" ? "generate-iff" : "generate-gst"
+        perform(command: command, period: period, success: "\(period.actionTitle) JSON generated")
+    }
+
+    @objc private func viewSelected() {
+        guard let path = selectedPeriod?.outputPath else { return }
+        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+    }
+
+    @objc private func markSelectedFiled() {
+        guard let period = selectedPeriod, period.status == "generated" else { return }
+        let alert = NSAlert()
+        alert.messageText = "Mark \(period.month) \(period.actionTitle) as filed?"
+        alert.informativeText = "Do this only after the GST portal confirms filing. This period and its invoice GST data will become read-only."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Mark Filed")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let command = period.kind == "iff" ? "mark-iff-filed" : "mark-gstr1-filed"
+        perform(command: command, period: period, success: "\(period.actionTitle) marked filed")
+    }
+
+    private func perform(command: String, period: GstDashboardPeriod, success: String) {
+        guard !isWorking else { return }
+        isWorking = true
+        messageLabel.textColor = .secondaryLabelColor
+        messageLabel.stringValue = "Working…"
+        render()
+
+        Task.detached {
+            do {
+                _ = try TimeLogClient().run(command, [period.month])
+                await MainActor.run {
+                    self.isWorking = false
+                    self.selectedMonth = period.month
+                    self.reload()
+                    self.messageLabel.textColor = .secondaryLabelColor
+                    self.messageLabel.stringValue = success
+                }
+            } catch {
+                await MainActor.run {
+                    self.isWorking = false
+                    self.messageLabel.textColor = .systemRed
+                    self.messageLabel.stringValue = error.localizedDescription
+                    self.render()
+                }
+            }
+        }
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let client = TimeLogClient()
@@ -833,6 +1322,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusRefreshTicks = 0
     private var statusPollInFlight = false
     private var dailyHoursWindow: DailyHoursWindowController?
+    private var gstDashboardWindow: GstDashboardWindowController?
     private var lastDailyTargetNotificationDate: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -1013,7 +1503,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
         menu.addItem(generateInvoiceMenuItem())
-        menu.addItem(generateGstMenuItem())
+        menu.addItem(gstDashboardMenuItem())
         menu.addItem(editMenuItem())
         menu.addItem(reimbursementsMenuItem())
         menu.addItem(actionItem("Refresh", action: #selector(refreshStatus)))
@@ -1059,27 +1549,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return item
     }
 
-    private func generateGstMenuItem() -> NSMenuItem {
-        let item = NSMenuItem(title: generationKind == "gst" ? "Generating GST..." : "Generate GST", action: nil, keyEquivalent: "")
+    private func gstDashboardMenuItem() -> NSMenuItem {
+        let item = actionItem("Open GST Dashboard", action: #selector(openGstDashboard))
         item.isEnabled = hasProject && !isGenerating
-
-        let submenu = NSMenu()
-        let currentMonth = status?.currentMonth ?? status?.month ?? "Current Month"
-        let previousMonth = status?.previousMonth ?? "Previous Month"
-
-        let current = NSMenuItem(title: "Current Return Period (\(currentMonth))", action: #selector(generateGstForMonth(_:)), keyEquivalent: "")
-        current.target = self
-        current.representedObject = currentMonth
-        current.isEnabled = hasProject && !isGenerating
-        submenu.addItem(current)
-
-        let previous = NSMenuItem(title: "Previous Return Period (\(previousMonth))", action: #selector(generateGstForMonth(_:)), keyEquivalent: "")
-        previous.target = self
-        previous.representedObject = previousMonth
-        previous.isEnabled = hasProject && !isGenerating
-        submenu.addItem(previous)
-
-        item.submenu = submenu
         return item
     }
 
@@ -1499,53 +1971,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func generateGstForMonth(_ sender: NSMenuItem) {
-        generateGst(month: sender.representedObject as? String)
-    }
-
-    private func generateGst(month: String? = nil) {
-        guard !isGenerating else { return }
-        generationKind = "gst"
-        generationStartedAt = Date()
-        updateTitle()
-        rebuildMenu()
-
-        Task.detached {
-            do {
-                let client = TimeLogClient()
-                let arguments = month.map { [$0] } ?? []
-                let result = try client.run("generate-gst", arguments)
-                await MainActor.run {
-                    self.status = result
-                    self.statusFetchedAt = Date()
-                    self.lastError = nil
-                    self.generationKind = nil
-                    self.updateTitle()
-                    self.updateActivity()
-                    self.rebuildMenu()
-                    self.notify(
-                        title: "GST JSON generated",
-                        body: "\(result.projectLabel) \(result.month)",
-                        destination: "folder",
-                        path: result.outputDir
-                    )
-                }
-            } catch {
-                await MainActor.run {
-                    self.lastError = error.localizedDescription
-                    self.generationKind = nil
-                    self.updateTitle()
-                    self.updateActivity()
-                    self.rebuildMenu()
-                    self.notify(
-                        title: "GST generation failed",
-                        body: self.shortError(error.localizedDescription),
-                        destination: "errorLog",
-                        path: TimeLogClient.errorLogURL.path
-                    )
-                }
-            }
+    @objc private func openGstDashboard() {
+        if gstDashboardWindow == nil {
+            gstDashboardWindow = GstDashboardWindowController()
+        } else {
+            gstDashboardWindow?.refresh()
         }
+        gstDashboardWindow?.showWindow(nil)
+        gstDashboardWindow?.window?.center()
+        gstDashboardWindow?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func editDailyHoursForMonth(_ sender: NSMenuItem) {

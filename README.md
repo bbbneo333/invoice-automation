@@ -160,6 +160,11 @@ invoice amounts are calculated from `timelog.json`, reimbursement entries, and
 project settings. Successful invoice generation saves the values used in
 `invoice.json` under `snapshot`; project config remains input only.
 
+QRMP filing state is stored separately in `gst-filings.json` under `outputDir`.
+Generated IFF and quarterly GSTR-1 JSON files are written under
+`<outputDir>/returns/<quarter>/`. An IFF or GSTR-1 remains `generated` until it
+is explicitly marked `filed`; generating a JSON file never records a portal filing.
+
 ### Invoice snapshots
 
 Generation saves invoice identity and ISO dates, supplier/customer details,
@@ -371,6 +376,53 @@ and the old fields `defaultTreatment`, `sacCode`, `sacDescription`, `ratePercent
 and `reverseCharge` are accepted as aliases for their `gst`-prefixed names.
 Use the new names for new configs. Supplying both names with conflicting values
 is an error. The app does not automatically rewrite existing project configs.
+
+### QRMP and IFF
+
+The GST dashboard includes a quarter-specific **Filing preference** control.
+Choose **QRMP**, enable **Use IFF in the first two months**, and save it for the
+applicable quarter. Later quarters inherit the latest saved preference; earlier
+quarters retain their historical setting. A quarter's preference becomes
+read-only after an IFF or GSTR-1 JSON has been generated or marked filed.
+
+Project configuration can still provide the default used before any dashboard
+preference has been saved:
+
+```json
+"gstFiling": {
+  "scheme": "qrmp",
+  "iff": "enabled"
+}
+```
+
+Open **GST Dashboard** from the menu-bar app to select a filing period, review
+invoice count, taxable value, output tax and total invoice value, and perform
+the applicable IFF or GSTR-1 action. After the GST portal confirms a filing,
+mark it filed in the dashboard. Filed periods are read-only, and filed IFF B2B
+rows are excluded from the quarterly GSTR-1; an IFF that was merely generated
+remains included.
+
+IFF JSON contains only the supported B2B invoice section. Quarterly GSTR-1
+includes B2B rows not already marked as filed through IFF, while its HSN summary
+and Documents Issued section cover all generated invoices in the quarter.
+
+The equivalent CLI commands are:
+
+```sh
+ruby src/time_log.rb generate-iff "October 2026"
+ruby src/time_log.rb mark-iff-filed "October 2026"
+ruby src/time_log.rb generate-gst "December 2026"
+ruby src/time_log.rb mark-gstr1-filed "December 2026"
+ruby src/time_log.rb gst-dashboard
+ruby src/time_log.rb set-gst-preference "October 2026" qrmp enabled
+```
+
+The dashboard records local generation and user-confirmed portal filing. It
+does not upload to the GST portal, verify portal status, calculate PMT-06 after
+ITC, or file GSTR-3B.
+
+For monthly filing, omit `gstFiling` or use `scheme: "monthly"` with
+`iff: "disabled"`.
 
 ## Optional Jira enrichment
 

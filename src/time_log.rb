@@ -9,6 +9,7 @@ require "securerandom"
 require_relative "app_paths"
 require_relative "invoice_calculation"
 require_relative "invoice_store"
+require_relative "gst_filing"
 
 module TimeLog
   REGISTRY_PATH = AppPaths.registry_path
@@ -161,9 +162,13 @@ module TimeLog
     }
   end
 
-  def run_gst_generation(month_label = currentMonthLabel)
-    stdout, stderr, status = Open3.capture3(RbConfig.ruby, File.join(__dir__, "generate_gstr1.rb"), month_label)
-    raise(stderr.empty? ? "GSTR-1 generation failed" : stderr.strip) unless status.success?
+  def run_gst_generation(month_label = currentMonthLabel, iff: false)
+    arguments = [RbConfig.ruby, File.join(__dir__, "generate_gstr1.rb")]
+    arguments << "--iff" if iff
+    arguments << month_label
+    stdout, stderr, status = Open3.capture3(*arguments)
+    label = iff ? "IFF" : "GSTR-1"
+    raise(stderr.empty? ? "#{label} generation failed" : stderr.strip) unless status.success?
 
     {
       "month" => month_label,
@@ -269,6 +274,8 @@ module TimeLog
     registry = load_registry
     active = active_project(registry)
     unless active
+      quarter = GstFiling.quarter(now.to_date)
+      previous_quarter = GstFiling.quarter(now.to_date << 3)
       return {
         "projectLabel" => "No Project",
         "projectConfigPath" => "",
@@ -303,11 +310,19 @@ module TimeLog
         "statePath" => "",
         "outputDir" => "",
         "currentReimbursements" => [],
-        "previousReimbursements" => []
+        "previousReimbursements" => [],
+        "gstFilingScheme" => "monthly",
+        "gstIffEnabled" => false,
+        "gstQuarterLabel" => quarter.fetch("label"),
+        "gstQuarterEndMonth" => quarter.fetch("endMonth"),
+        "gstPreviousQuarterLabel" => previous_quarter.fetch("label"),
+        "gstPreviousQuarterEndMonth" => previous_quarter.fetch("endMonth"),
+        "gstIffPeriods" => quarter.fetch("monthLabels").first(2).map { |month| { "month" => month, "status" => "pending" } }
       }
     end
 
     config = load_config
+    gst_status = GstFiling.filing_status(config, now: now)
     open_paths = find_open_state_paths(config)
     paths = open_paths || resolve_paths(month_label, config)
     month_label = paths[:month]
@@ -363,7 +378,14 @@ module TimeLog
       "statePath" => paths[:statePath],
       "outputDir" => paths[:outputDir],
       "currentReimbursements" => reimbursementEntries(currentMonthLabel(now: now)),
-      "previousReimbursements" => reimbursementEntries(previousMonthLabel(now: now))
+      "previousReimbursements" => reimbursementEntries(previousMonthLabel(now: now)),
+      "gstFilingScheme" => gst_status.fetch("gstFilingScheme"),
+      "gstIffEnabled" => gst_status.fetch("gstIffEnabled"),
+      "gstQuarterLabel" => gst_status.fetch("gstQuarterLabel"),
+      "gstQuarterEndMonth" => gst_status.fetch("gstQuarterEndMonth"),
+      "gstPreviousQuarterLabel" => gst_status.fetch("gstPreviousQuarterLabel"),
+      "gstPreviousQuarterEndMonth" => gst_status.fetch("gstPreviousQuarterEndMonth"),
+      "gstIffPeriods" => gst_status.fetch("gstIffPeriods")
     }
   end
 
@@ -776,7 +798,7 @@ if $PROGRAM_NAME == __FILE__
     end
   end
 
-  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|generate-gst [\"May 2026\"]") if command.nil?
+  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|gst-dashboard|set-gst-preference|generate-gst|generate-iff|mark-iff-filed|mark-gstr1-filed [\"May 2026\"]") if command.nil?
 
   begin
     result = case command
@@ -788,6 +810,13 @@ if $PROGRAM_NAME == __FILE__
       InvoiceStore.migrate_config(TimeLog.active_config_path)
     when "storage-paths"
       TimeLog.storagePaths
+    when "gst-dashboard"
+      GstFiling.dashboard(TimeLog.load_config)
+    when "set-gst-preference"
+      abort("Usage: ruby src/time_log.rb set-gst-preference \"October 2026\" monthly|qrmp disabled|enabled") unless ARGV.length == 3
+      quarter_period, scheme, iff = ARGV
+      GstFiling.set_preference(TimeLog.load_config, quarter_period, scheme, iff)
+      TimeLog.statusLog
     when "reimbursements"
       TimeLog.reimbursementEntries(month_label)
     when "add-reimbursement"
@@ -833,6 +862,22 @@ if $PROGRAM_NAME == __FILE__
           "message" => result["message"]
         }
       )
+    when "generate-iff"
+      result = TimeLog.run_gst_generation(month_label, iff: true)
+      TimeLog.statusLog.merge(
+        "month" => result["month"],
+        "outputDir" => File.dirname(result["output"]),
+        "generation" => {
+          "output" => result["output"],
+          "message" => result["message"]
+        }
+      )
+    when "mark-iff-filed"
+      GstFiling.mark_iff_filed(TimeLog.load_config, month_label)
+      TimeLog.statusLog
+    when "mark-gstr1-filed"
+      GstFiling.mark_gstr1_filed(TimeLog.load_config, month_label)
+      TimeLog.statusLog
     when "daily-hours"
       TimeLog.dailyHours(month_label)
     when "set-day"

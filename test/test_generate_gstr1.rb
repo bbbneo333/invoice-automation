@@ -165,3 +165,262 @@ class Gstr1GenerationTest < Minitest::Test
     assert File.file?(File.join(result["outputDir"], "001 GSTR-1 - September 2026.json"))
   end
 end
+
+class QrmpGenerationTest < Minitest::Test
+  def setup
+    @directory = Dir.mktmpdir("qrmp-test-")
+    @config = {
+      "outputDir" => File.join(@directory, "invoices"),
+      "gstFiling" => { "scheme" => "qrmp", "iff" => "enabled" },
+      "taxProfile" => {
+        "type" => "gst", "enabled" => true, "effectiveFrom" => "2026-01-01",
+        "gstSacCode" => "998314", "gstUqc" => "NA", "gstRatePercent" => 18,
+        "amountsIncludeTax" => false, "gstReverseCharge" => false,
+        "gstDefaultTreatment" => "interState"
+      }
+    }
+    @store = InvoiceStore.new(@config)
+    add_invoice("October 2026", "2026-10-31")
+    add_invoice("November 2026", "2026-11-30")
+    add_invoice("December 2026", "2026-12-31")
+  end
+
+  def teardown
+    FileUtils.remove_entry(@directory)
+  end
+
+  def add_invoice(month, date)
+    record = @store.find_or_create(month)
+    snapshot = {
+      "version" => 1,
+      "invoiceNo" => record.fetch("invoiceNo"),
+      "invoiceDate" => date,
+      "supplier" => { "gst" => { "gstin" => "08AAAAA0000A1Z5", "stateCode" => "08" } },
+      "customer" => { "gst" => { "gstin" => "29BBBBB0000B1Z4", "stateCode" => "29" } },
+      "service" => { "hours" => "158.555", "sacCode" => "998314" },
+      "gst" => {
+        "enabled" => true, "treatment" => "interState", "placeOfSupply" => "29",
+        "reverseCharge" => false, "ratePercent" => "18.0",
+        "taxes" => [{ "name" => "IGST", "ratePercent" => "18.0", "amount" => "65141.80" }]
+      },
+      "reimbursements" => [],
+      "totals" => { "taxableValue" => "361898.89", "grandTotal" => "427040.69" }
+    }
+    InvoiceStore.write_json(
+      File.join(@store.directory(record), "invoice.json"),
+      record.reject { |key, _| key == "reimbursements" }.merge("snapshot" => snapshot)
+    )
+  end
+
+  def invoice_numbers(payload)
+    payload.fetch("b2b").flat_map { |customer| customer.fetch("inv") }.map { |invoice| invoice.fetch("inum") }
+  end
+
+  def test_qrmp_periods_and_configuration
+    assert_equal({ "scheme" => "qrmp", "iff" => "enabled" }, GstFiling.settings(@config))
+    period = GstFiling.quarter("November 2026")
+    assert_equal "October-December 2026", period.fetch("label")
+    assert_equal "December 2026", period.fetch("endMonth")
+    assert GstFiling.iff_eligible?("October 2026")
+    assert GstFiling.iff_eligible?("November 2026")
+    refute GstFiling.iff_eligible?("December 2026")
+  end
+
+  def test_quarter_preferences_are_effective_dated_and_inherited
+    config = Marshal.load(Marshal.dump(@config))
+    config["gstFiling"] = { "scheme" => "monthly", "iff" => "disabled" }
+
+    GstFiling.set_preference(config, "October 2026", "qrmp", "enabled", now: Time.utc(2026, 10, 29, 10))
+    assert_equal "monthly", GstFiling.settings(config, period: "September 2026").fetch("scheme")
+    assert_equal({ "scheme" => "qrmp", "iff" => "enabled" }, GstFiling.settings(config, period: "October 2026"))
+    assert_equal({ "scheme" => "qrmp", "iff" => "enabled" }, GstFiling.settings(config, period: "January 2027"))
+
+    GstFiling.set_preference(config, "January 2027", "monthly", "disabled")
+    assert_equal "qrmp", GstFiling.settings(config, period: "December 2026").fetch("scheme")
+    assert_equal({ "scheme" => "monthly", "iff" => "disabled" }, GstFiling.settings(config, period: "March 2027"))
+  end
+
+  def test_quarter_preference_locks_after_gst_generation
+    Gstr1Generator.generate_iff("October 2026", config: @config)
+    error = assert_raises(GstFiling::ConfigError) do
+      GstFiling.set_preference(@config, "October 2026", "monthly", "disabled")
+    end
+    assert_includes error.message, "filing preference is locked"
+
+    dashboard = GstFiling.dashboard(@config, now: Time.local(2026, 10, 30, 9))
+    preference = dashboard.fetch("preferences").find { |item| item.fetch("quarterLabel") == "October-December 2026" }
+    assert preference.fetch("locked")
+    assert_includes preference.fetch("lockReason"), "generated"
+  end
+
+  def test_generates_iff_and_requires_explicit_filed_transition
+    path = Gstr1Generator.generate_iff("October 2026", config: @config)
+    payload = JSON.parse(File.read(path))
+    assert_equal %w[gstin fp version hash b2b], payload.keys
+    assert_equal "102026", payload.fetch("fp")
+    assert_equal ["001"], invoice_numbers(payload)
+    refute payload.key?("hsn")
+    refute payload.key?("doc_issue")
+    assert_equal "generated", GstFiling.iff_entry(@config, "October 2026").fetch("status")
+
+    entry = GstFiling.mark_iff_filed(@config, "October 2026", now: Time.utc(2026, 11, 5, 10))
+    assert_equal "filed", entry.fetch("status")
+    assert_equal "2026-11-05T10:00:00Z", entry.fetch("filedAt")
+    assert_raises(Gstr1Generator::ConfigError) do
+      Gstr1Generator.generate_iff("October 2026", config: @config)
+    end
+  end
+
+  def test_quarterly_payload_excludes_only_filed_iff_b2b_and_keeps_quarter_summaries
+    Gstr1Generator.generate_iff("October 2026", config: @config)
+    GstFiling.mark_iff_filed(@config, "October 2026")
+    Gstr1Generator.generate_iff("November 2026", config: @config)
+
+    path = Gstr1Generator.generate_quarterly("December 2026", config: @config)
+    payload = JSON.parse(File.read(path))
+    assert_equal "122026", payload.fetch("fp")
+    assert_equal %w[002 003], invoice_numbers(payload)
+    assert_equal "1085696.67", format("%.2f", payload.dig("hsn", "hsn_b2b", 0, "txval"))
+    assert_equal %w[001 002 003], payload.dig("doc_issue", "doc_det", 0, "docs").map { |document| document.fetch("from") }
+
+    GstFiling.mark_iff_filed(@config, "November 2026")
+    assert_nil GstFiling.gstr1_entry(@config, "December 2026"), "filing another IFF invalidates a generated quarterly return"
+    path = Gstr1Generator.generate_quarterly("October 2026", config: @config)
+    assert_equal ["003"], invoice_numbers(JSON.parse(File.read(path)))
+  end
+
+  def test_rejects_iff_for_third_month_and_invalid_configurations
+    assert_raises(Gstr1Generator::ConfigError) do
+      Gstr1Generator.generate_iff("December 2026", config: @config)
+    end
+    assert_raises(GstFiling::ConfigError) do
+      GstFiling.settings(@config.merge("gstFiling" => { "scheme" => "monthly", "iff" => "enabled" }))
+    end
+    assert_raises(GstFiling::ConfigError) do
+      GstFiling.mark_iff_filed(@config, "October 2026")
+    end
+  end
+
+  def test_rejects_invoice_changes_after_iff_is_marked_filed
+    Gstr1Generator.generate_iff("October 2026", config: @config)
+    GstFiling.mark_iff_filed(@config, "October 2026")
+    record = @store.find("October 2026")
+    path = File.join(@store.directory(record), "invoice.json")
+    metadata = JSON.parse(File.read(path))
+    metadata.fetch("snapshot").fetch("totals")["grandTotal"] = "1.00"
+    InvoiceStore.write_json(path, metadata)
+
+    error = assert_raises(Gstr1Generator::ConfigError) do
+      Gstr1Generator.generate_quarterly("December 2026", config: @config)
+    end
+    assert_includes error.message, "changed after"
+  end
+
+  def test_rejects_marking_generated_json_filed_after_invoice_changes
+    Gstr1Generator.generate_iff("October 2026", config: @config)
+    record = @store.find("October 2026")
+    path = File.join(@store.directory(record), "invoice.json")
+    metadata = JSON.parse(File.read(path))
+    metadata.fetch("snapshot").fetch("totals")["grandTotal"] = "1.00"
+    InvoiceStore.write_json(path, metadata)
+
+    error = assert_raises(GstFiling::ConfigError) do
+      GstFiling.mark_iff_filed(@config, "October 2026")
+    end
+    assert_includes error.message, "regenerate it before marking it filed"
+  end
+
+  def test_dashboard_exposes_period_actions_amounts_and_filed_lock
+    Gstr1Generator.generate_iff("October 2026", config: @config)
+    GstFiling.mark_iff_filed(@config, "October 2026", now: Time.utc(2026, 11, 5, 10))
+
+    dashboard = GstFiling.dashboard(@config, now: Time.local(2026, 11, 6, 9))
+    assert_equal "qrmp", dashboard.fetch("scheme")
+    assert dashboard.fetch("iffEnabled")
+    assert_equal "November 2026", dashboard.fetch("defaultPeriod")
+
+    october = dashboard.fetch("periods").find { |period| period.fetch("month") == "October 2026" }
+    assert_equal "iff", october.fetch("kind")
+    assert_equal "filed", october.fetch("status")
+    assert october.fetch("locked")
+    refute october.fetch("canGenerate")
+    assert_equal 1, october.dig("amounts", "invoiceCount")
+    assert_equal 361_898.89, october.dig("amounts", "taxableValue")
+    assert_equal 65_141.8, october.dig("amounts", "igst")
+    assert_equal 427_040.69, october.dig("amounts", "invoiceValue")
+    assert File.file?(october.fetch("outputPath"))
+
+    december = dashboard.fetch("periods").find { |period| period.fetch("month") == "December 2026" }
+    assert_equal "quarterlyGstr1", december.fetch("kind")
+    assert_equal 3, december.dig("amounts", "invoiceCount")
+    assert_equal 1_085_696.67, december.dig("amounts", "taxableValue")
+    refute december.fetch("canGenerate"), "quarterly GSTR-1 stays unavailable before its third month"
+  end
+
+  def test_quarterly_gstr1_generated_and_filed_state_locks_regeneration_and_invoice
+    path = Gstr1Generator.generate_quarterly("December 2026", config: @config)
+    entry = GstFiling.gstr1_entry(@config, "December 2026")
+    assert_equal "generated", entry.fetch("status")
+    assert_equal "quarterly", entry.fetch("kind")
+    assert_equal File.basename(path), File.basename(entry.fetch("outputPath"))
+
+    GstFiling.mark_gstr1_filed(@config, "December 2026", now: Time.utc(2027, 1, 10, 12))
+    assert GstFiling.gstr1_filed?(@config, "December 2026")
+    assert_raises(Gstr1Generator::ConfigError) do
+      Gstr1Generator.generate_quarterly("December 2026", config: @config)
+    end
+    error = assert_raises(GstFiling::ConfigError) do
+      GstFiling.assert_invoice_editable!(@config, @store.find("October 2026").fetch("snapshot"))
+    end
+    assert_includes error.message, "GSTR-1 is filed"
+  end
+
+  def test_time_log_qrmp_commands_generate_mark_and_aggregate_without_rendering
+    config_path = File.join(@directory, "project.json")
+    InvoiceStore.write_json(config_path, @config)
+    registry_path = File.join(@directory, "registry.json")
+    InvoiceStore.write_json(registry_path, {
+      "projects" => [{ "label" => "TEST", "configPath" => config_path, "active" => true }]
+    })
+    environment = {
+      "INVOICE_AUTOMATION_CONFIG" => registry_path,
+      "INVOICE_AUTOMATION_DATA_DIR" => File.join(@directory, "app-data"),
+      "INVOICE_AUTOMATION_CACHE_DIR" => File.join(@directory, "cache"),
+      "INVOICE_AUTOMATION_LOG_DIR" => File.join(@directory, "logs"),
+      "INVOICE_AUTOMATION_ERROR_LOG" => File.join(@directory, "logs", "error.log")
+    }
+    cli = File.expand_path("../src/time_log.rb", __dir__)
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "generate-iff", "October 2026")
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    assert_equal "generated", result.fetch("gstIffPeriods").first.fetch("status")
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-iff-filed", "October 2026")
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    assert_equal "filed", result.fetch("gstIffPeriods").first.fetch("status")
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "generate-gst", "December 2026")
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    payload = JSON.parse(File.read(result.fetch("generation").fetch("output")))
+    assert_equal %w[002 003], invoice_numbers(payload)
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "gst-dashboard")
+    assert status.success?, stderr
+    dashboard = JSON.parse(stdout)
+    assert_equal "qrmp", dashboard.fetch("scheme")
+    assert_equal "filed", dashboard.fetch("periods").find { |period| period.fetch("month") == "October 2026" }.fetch("status")
+
+    stdout, stderr, status = Open3.capture3(
+      environment, RbConfig.ruby, cli, "set-gst-preference", "January 2027", "monthly", "disabled"
+    )
+    assert status.success?, stderr
+    assert_equal "monthly", GstFiling.settings(@config, period: "January 2027").fetch("scheme")
+
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-gstr1-filed", "December 2026")
+    assert status.success?, stderr
+    assert_equal "filed", GstFiling.gstr1_entry(@config, "December 2026").fetch("status")
+  end
+end

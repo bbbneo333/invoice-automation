@@ -1,6 +1,10 @@
 {
   "locale": "en-IN",
   "invoiceDateTiming": "firstOfFollowingMonth",
+  "gstFiling": {
+    "scheme": "monthly",
+    "iff": "disabled"
+  },
   "jira": {
     "enabled": false,
     "domain": "your-company",

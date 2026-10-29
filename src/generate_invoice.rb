@@ -174,6 +174,7 @@ module InvoiceGenerator
         raise ConfigError, "No supported snapshot exists for #{month_label}; older invoices are not backfilled"
       end
     else
+      GstFiling.assert_invoice_editable!(config, record["snapshot"]) if record && record["snapshot"].is_a?(Hash)
       record = TimeLog.invoice_data(month_label, config)
       period_start, period_end = InvoiceCalculation.parse_month(month_label)
       invoice_date = InvoiceCalculation.invoice_date(config, period_end)
