@@ -1,4 +1,5 @@
 require "minitest/autorun"
+require "csv"
 require "tmpdir"
 require "open3"
 require "rbconfig"
@@ -217,21 +218,19 @@ class QrmpGenerationTest < Minitest::Test
   end
 
   def write_simple_ims(path)
-    rows = [
-      ["GSTIN of supplier", "Trade/Legal name", "Invoice number", "Invoice Date", "Invoice Value(₹)", "Taxable Value (₹)", "Integrated Tax(₹)"],
-      ["29SUPPLIER0001Z1", "Supplier", "IMS-1", "15/10/2026", "118", "100", "18"]
-    ]
-    body = rows.each_with_index.map do |row, row_index|
-      cells = row.each_with_index.map do |value, column_index|
-        column = (65 + column_index).chr
-        %(<c r="#{column}#{row_index + 1}" t="inlineStr"><is><t>#{REXML::Text.normalize(value)}</t></is></c>)
-      end.join
-      %(<row r="#{row_index + 1}">#{cells}</row>)
-    end.join
-    Zip::File.open(path, create: true) do |archive|
-      archive.get_output_stream("xl/worksheets/sheet1.xml") do |stream|
-        stream.write %(<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>#{body}</sheetData></worksheet>)
-      end
+    CSV.open(path, "wb") do |csv|
+      csv << ["Goods and Services Tax  - IMS"]
+      csv << ["Taxable inward supplies received from registered persons"]
+      csv << [
+        "GSTIN of Supplier", "Trade/Legal name", "Invoice Number", "Invoice Type", "Invoice Date",
+        "Invoice Value", "Status", "Place of Supply", "Taxable Value", "Integrated Tax", "Central Tax",
+        "State/UT Tax", "Cess", "Remarks", "Source", "Source Return Period", "Source Filing Status",
+        "Source Return Filing Date", "Filing Frequency of Supplier"
+      ]
+      csv << [
+        "29SUPPLIER0001Z1", "Supplier", "IMS-1", "Regular", "15/10/2026", "118", "No Action",
+        "Rajasthan", "100", "18", "0", "0", "0", "", "GSTR-1/IFF", "10/2026", "Not Filed", "NA", "Monthly"
+      ]
     end
   end
 
@@ -389,7 +388,7 @@ class QrmpGenerationTest < Minitest::Test
     dashboard = GstFiling.dashboard(@config, now: Time.local(2026, 10, 29, 9))
     october = dashboard.fetch("periods").find { |period| period.fetch("month") == "October 2026" }
     input = october.fetch("checklist").find { |item| item.fetch("id") == "input" }
-    assert_equal "Record and monitor October 2026 purchase bills", input.fetch("title")
+    assert_equal "Record October 2026 purchase bills", input.fetch("title")
     assert_equal "attention", input.fetch("status")
     assert_equal 2, input.fetch("invoiceCount")
     assert_equal 1, input.fetch("foundCount")
@@ -398,7 +397,7 @@ class QrmpGenerationTest < Minitest::Test
     assert_equal 1_800.0, input.fetch("effectiveInputGst")
 
     ims = october.fetch("checklist").find { |item| item.fetch("id") == "imsImport" }
-    assert_equal "Check IMS now for October 2026 purchase bills; repeat after 14 November 2026", ims.fetch("title")
+    assert_equal "Check IMS for October 2026 purchase bills", ims.fetch("title")
     assert_equal "ready", ims.fetch("status")
     assert_equal "importIms", ims.fetch("action")
     assert_equal "2026-11-14", ims.fetch("recommendedDate")
@@ -430,7 +429,7 @@ class QrmpGenerationTest < Minitest::Test
     assert_includes preference.fetch("lockReason"), "checklist action"
 
     december = dashboard.fetch("periods").find { |period| period.fetch("month") == "December 2026" }
-    assert_equal "Record and monitor October-December 2026 purchase bills", december.fetch("checklist").first.fetch("title")
+    assert_equal "Record October-December 2026 purchase bills", december.fetch("checklist").first.fetch("title")
     gstr2b = december.fetch("checklist").find { |item| item.fetch("id") == "gstr2bImport" }
     assert_equal "Import and reconcile October-December 2026 GSTR-2B", gstr2b.fetch("title")
     assert_equal "2027-01-14", gstr2b.fetch("availableDate")
@@ -525,7 +524,7 @@ class QrmpGenerationTest < Minitest::Test
     assert_equal "qrmp", dashboard.fetch("scheme")
     assert_equal "filed", dashboard.fetch("periods").find { |period| period.fetch("month") == "October 2026" }.fetch("status")
 
-    ims_path = File.join(@directory, "ims.xlsx")
+    ims_path = File.join(@directory, "IMS_B2B_08AAAAA0000A1Z5_30102026.csv")
     write_simple_ims(ims_path)
     stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "import-ims", "October 2026", ims_path)
     assert status.success?, stderr

@@ -461,7 +461,7 @@ module GstFiling
       input_months.select { |summary| summary.fetch("month") == month_label }
     end
     input = combine_input_summaries(relevant_inputs)
-    input_title = quarterly ? "Record and monitor #{period.fetch('quarterLabel')} purchase bills" : "Record and monitor #{month_label} purchase bills"
+    input_title = quarterly ? "Record #{period.fetch('quarterLabel')} purchase bills" : "Record #{month_label} purchase bills"
     input_status = if input.fetch("invoiceCount").zero? && input.fetch("carriedInCount").zero? && input.fetch("missingCount").zero?
       "pending"
     elsif input.fetch("missingCount").zero?
@@ -517,9 +517,9 @@ module GstFiling
     ims_imported_date = ims_entry && Date.parse(ims_entry.fetch("importedAt"))
     ims_needs_refresh = ims_imported_date && ims_imported_date < ims_recommended_date && now.to_date >= ims_recommended_date
     ims_title = if now.to_date < ims_recommended_date
-      "Check IMS now for #{month_label} purchase bills; repeat after #{ims_recommended_date.strftime('%-d %B %Y')}"
+      "Check IMS for #{month_label} purchase bills"
     else
-      "Download current IMS Excel and reconcile #{month_label} purchase bills"
+      "Download the current IMS B2B CSV and reconcile #{month_label} purchase bills"
     end
     ims_item = {
       "id" => "imsImport",

@@ -177,6 +177,7 @@ struct ImsImportData: Decodable {
     let period: String
     let importedAt: String
     let sourceFilename: String
+    let sourceFormat: String?
     let summary: ImsImportSummary
     let invoices: [ImsPortalInvoice]
 }
@@ -1130,7 +1131,7 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
             backing: .buffered,
             defer: false
         )
-        window.title = "GST Input Bills — \(monthLabel)"
+        window.title = "GST Input Bills - \(monthLabel)"
         window.minSize = NSSize(width: 620, height: 360)
         super.init(window: window)
         buildUI()
@@ -1143,7 +1144,7 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
 
     func setMonth(_ month: String) {
         monthLabel = month
-        window?.title = "GST Input Bills — \(month)"
+        window?.title = "GST Input Bills - \(month)"
         reload()
     }
 
@@ -1234,7 +1235,7 @@ final class GstBillsWindowController: NSWindowController, NSTableViewDataSource,
         let pending = data?.pendingCount ?? 0
         let ineligible = data?.ineligibleCount ?? 0
         let imsSeen = data?.imsSeenCount ?? 0
-        summaryLabel.stringValue = "Recorded GST: \(money(normal))  ·  Effective GST: \(money(effective))  ·  IMS seen: \(imsSeen)  ·  Carried in: \(carriedIn)  ·  Still pending: \(pending)  ·  Ineligible: \(ineligible)"
+        summaryLabel.stringValue = "Recorded GST: \(money(normal))  ·  Confirmed ITC (GSTR-2B): \(money(effective))  ·  IMS seen: \(imsSeen)  ·  Carried in: \(carriedIn)  ·  Still pending: \(pending)  ·  Ineligible: \(ineligible)"
         updateSelectionActions()
     }
 
@@ -1494,7 +1495,7 @@ final class ImsResultsWindowController: NSWindowController, NSTableViewDataSourc
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 520),
             styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false
         )
-        window.title = "IMS Reconciliation · \(data.period)"
+        window.title = "IMS Reconciliation - \(data.period)"
         super.init(window: window)
         buildUI()
     }
@@ -1517,8 +1518,9 @@ final class ImsResultsWindowController: NSWindowController, NSTableViewDataSourc
         ])
 
         let summary = data.summary
+        let actionSummary = "\(summary.acceptedCount) accepted · \(summary.rejectedCount) rejected · \(summary.pendingCount) pending · \(summary.noActionCount) no action"
         let summaryLabel = NSTextField(wrappingLabelWithString:
-            "\(summary.portalInvoiceCount) IMS records · \(summary.matchedCount) matched · \(summary.importedCount) added · \(summary.ambiguousCount) ambiguous · \(summary.missingLocalCount) local missing\n\(summary.acceptedCount) accepted · \(summary.rejectedCount) rejected · \(summary.pendingCount) pending · \(summary.noActionCount) no action · GST \(money(summary.portalGst))\nSince previous import: \(summary.newCount) new · \(summary.changedCount) changed · \(summary.removedCount) removed · Source: \(data.sourceFilename)"
+            "\(summary.portalInvoiceCount) IMS records · \(summary.matchedCount) matched · \(summary.importedCount) added · \(summary.ambiguousCount) ambiguous · \(summary.missingLocalCount) local missing\n\(actionSummary) · GST \(money(summary.portalGst))\nSince previous import: \(summary.newCount) new · \(summary.changedCount) changed · \(summary.removedCount) removed · Source: \(data.sourceFilename)"
         )
         summaryLabel.font = .systemFont(ofSize: 13, weight: .medium)
         root.addArrangedSubview(summaryLabel)
@@ -1549,7 +1551,7 @@ final class ImsResultsWindowController: NSWindowController, NSTableViewDataSourc
         buttons.orientation = .horizontal
         buttons.spacing = 8
         buttons.addArrangedSubview(NSButton(title: "Manage Bills", target: self, action: #selector(manageBills)))
-        buttons.addArrangedSubview(NSButton(title: "Import Updated IMS", target: self, action: #selector(importAgain)))
+        buttons.addArrangedSubview(NSButton(title: "Import Updated IMS CSV", target: self, action: #selector(importAgain)))
         buttons.addArrangedSubview(NSButton(title: "Close", target: self, action: #selector(closeWindow)))
         root.addArrangedSubview(buttons)
     }
@@ -1621,7 +1623,7 @@ final class Gstr2bResultsWindowController: NSWindowController, NSTableViewDataSo
             backing: .buffered,
             defer: false
         )
-        window.title = "GSTR-2B Reconciliation · \(data.period)"
+        window.title = "GSTR-2B Reconciliation - \(data.period)"
         super.init(window: window)
         buildUI()
     }
@@ -1846,7 +1848,7 @@ final class GstDashboardWindowController: NSWindowController {
         root.addArrangedSubview(checklistStack)
         checklistStack.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
 
-        let checklistNote = NSTextField(wrappingLabelWithString: "IMS matches are provisional. Effective input GST includes only GSTR-2B matches or explicit manual overrides. Confirm portal balances, adjustments and any due-date extension on the GST portal.")
+        let checklistNote = NSTextField(wrappingLabelWithString: "IMS matches are provisional. Confirmed ITC (GSTR-2B) includes only GSTR-2B matches or explicit manual overrides. Confirm portal balances, adjustments and any due-date extension on the GST portal.")
         checklistNote.textColor = .secondaryLabelColor
         checklistNote.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         root.addArrangedSubview(checklistNote)
@@ -1918,8 +1920,18 @@ final class GstDashboardWindowController: NSWindowController {
 
     private func addPeriodMenuItem(_ period: GstDashboardPeriod, currentMonth: Date) {
         let periodDate = monthDate(period.month)
-        let status = period.status == "filed" ? " — Filed" : period.status == "generated" ? " — Generated" : ""
-        let current = periodDate == currentMonth ? " — Current" : ""
+        let paymentComplete = period.checklist.contains { $0.id == "payment" && $0.status == "complete" }
+        let status: String
+        if paymentComplete {
+            status = " - Paid"
+        } else if period.kind == "iff" && period.status == "filed" {
+            status = " - IFF Filed"
+        } else if period.status == "filed" {
+            status = " - Filed"
+        } else {
+            status = ""
+        }
+        let current = periodDate == currentMonth ? " - Current" : ""
         let item = NSMenuItem(title: "\(period.month)\(current)\(status)", action: nil, keyEquivalent: "")
         item.representedObject = period.month
         periodMenu.menu?.addItem(item)
@@ -1990,7 +2002,7 @@ final class GstDashboardWindowController: NSWindowController {
             let title = NSTextField(wrappingLabelWithString: item.title)
             title.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
             labels.addArrangedSubview(title)
-            let detail = NSTextField(wrappingLabelWithString: checklistDetail(item))
+            let detail = NSTextField(wrappingLabelWithString: checklistDetail(item, period: period))
             detail.textColor = .secondaryLabelColor
             detail.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             labels.addArrangedSubview(detail)
@@ -2013,30 +2025,29 @@ final class GstDashboardWindowController: NSWindowController {
         }
     }
 
-    private func checklistDetail(_ item: GstChecklistItem) -> String {
+    private func checklistDetail(_ item: GstChecklistItem, period: GstDashboardPeriod) -> String {
         let due = item.dueDate.map { "Due \(displayDate($0))" }
         switch item.id {
         case "imsImport":
-            var parts = ["Available continuously"]
-            if let recommendedDate = item.recommendedDate {
-                parts.append("Recommended monthly check \(displayDate(recommendedDate))")
-            }
+            var parts: [String] = []
             if item.status == "attention" {
                 parts.append("Refresh now: the saved snapshot was imported before this check date")
             }
             if let portalCount = item.portalInvoiceCount {
                 parts.append(contentsOf: [
-                    "\(portalCount) IMS",
-                    "\(item.matchedCount ?? 0) matched",
-                    "\(item.importedCount ?? 0) added",
-                    "\(item.acceptedCount ?? 0) accepted",
-                    "\(item.pendingCount ?? 0) pending",
-                    "\(item.rejectedCount ?? 0) rejected",
-                    "\(item.newCount ?? 0) new",
-                    "\(item.changedCount ?? 0) changed"
+                    "\(portalCount) IMS invoices",
+                    "\(item.matchedCount ?? 0) matched existing bills",
+                    "\(item.importedCount ?? 0) added"
                 ])
+                if (item.acceptedCount ?? 0) > 0 { parts.append("\(item.acceptedCount ?? 0) accepted") }
+                if (item.pendingCount ?? 0) > 0 { parts.append("\(item.pendingCount ?? 0) pending") }
+                if (item.rejectedCount ?? 0) > 0 { parts.append("\(item.rejectedCount ?? 0) rejected") }
+                if (item.noActionCount ?? 0) > 0 { parts.append("\(item.noActionCount ?? 0) No Action") }
             } else {
-                parts.append("Download the complete IMS Excel from the GST portal")
+                parts.append("Download the IMS B2B CSV from the GST portal")
+            }
+            if let recommendedDate = item.recommendedDate {
+                parts.append("Refresh after \(displayDate(recommendedDate))")
             }
             return parts.joined(separator: " · ")
         case "gstr2bImport":
@@ -2047,23 +2058,25 @@ final class GstDashboardWindowController: NSWindowController {
                     "\(item.importedCount ?? 0) added",
                     "\(item.ambiguousCount ?? 0) ambiguous",
                     "\(item.missingLocalCount ?? 0) local missing",
-                    "ITC \(money(item.effectiveInputGst ?? 0))"
+                    "Confirmed ITC (GSTR-2B) \(money(item.effectiveInputGst ?? 0))"
                 ].joined(separator: " · ")
             }
             let available = item.availableDate.map { "Available \(displayDate($0))" }
             return [available, "Download JSON/XLSX from GST portal"].compactMap { $0 }.joined(separator: " · ")
         case "input":
+            let invoiceCount = item.invoiceCount ?? 0
+            let foundCount = item.foundCount ?? 0
+            let awaitingCount = item.missingCount ?? 0
+            let currentMissingCount = max(invoiceCount - foundCount, 0)
+            let carriedForwardCount = max(awaitingCount - currentMissingCount, 0)
+            let periodScope = period.kind == "quarterlyGstr1" ? "quarter" : (period.month.split(separator: " ").first.map(String.init) ?? period.month)
             var parts = [
-                "\(item.invoiceCount ?? 0) recorded",
-                "\(item.foundCount ?? 0) found",
-                "\(item.missingCount ?? 0) pending"
+                "\(invoiceCount) \(periodScope) bills",
+                "Input GST \(money(item.gstAmount ?? 0))",
+                "\(awaitingCount) awaiting GSTR-2B"
             ]
-            if (item.carriedInCount ?? 0) > 0 { parts.append("\(item.carriedInCount ?? 0) carried in") }
-            if (item.resolvedLaterCount ?? 0) > 0 { parts.append("\(item.resolvedLaterCount ?? 0) resolved later") }
-            if (item.ineligibleCount ?? 0) > 0 { parts.append("\(item.ineligibleCount ?? 0) ineligible") }
-            if (item.imsSeenCount ?? 0) > 0 { parts.append("\(item.imsSeenCount ?? 0) seen in IMS") }
-            parts.append("GST \(money(item.gstAmount ?? 0))")
-            parts.append("Effective \(money(item.effectiveInputGst ?? 0))")
+            if carriedForwardCount > 0 { parts.append("\(carriedForwardCount) carried forward") }
+            parts.append("Confirmed ITC \(money(item.effectiveInputGst ?? 0))")
             return parts.joined(separator: " · ")
         case "generate":
             let count = item.invoiceCount ?? 0
@@ -2081,7 +2094,7 @@ final class GstDashboardWindowController: NSWindowController {
         case "paymentReview", "payment", "gstr3bReview", "gstr3b":
             let balance = item.estimatedBalance ?? 0
             let estimate = balance >= 0 ? "Estimated payable \(money(balance))" : "Estimated excess input credit \(money(abs(balance)))"
-            let summary = "\(estimate) · Output GST \(money(item.gstAmount ?? 0)) · Effective input \(money(item.effectiveInputGst ?? 0))"
+            let summary = "\(estimate) · Output GST \(money(item.gstAmount ?? 0)) · Confirmed ITC (GSTR-2B) \(money(item.effectiveInputGst ?? 0))"
             if let completedAt = item.completedAt {
                 return "Completed \(displayTimestamp(completedAt)) · \(summary)"
             }
@@ -2112,7 +2125,7 @@ final class GstDashboardWindowController: NSWindowController {
     private func checklistButtonTitle(_ item: GstChecklistItem) -> String {
         switch item.action {
         case "manageBills": return "Manage Bills"
-        case "importIms": return "Import IMS"
+        case "importIms": return "Import IMS CSV"
         case "viewIms": return "Review IMS"
         case "importGstr2b": return "Import GSTR-2B"
         case "viewGstr2b": return "Review Results"
@@ -2301,16 +2314,16 @@ final class GstDashboardWindowController: NSWindowController {
     private func importImsForSelectedPeriod() {
         guard let period = selectedPeriod else { return }
         let panel = NSOpenPanel()
-        panel.title = "Import IMS snapshot for \(period.month)"
+        panel.title = "Import GST portal IMS B2B CSV for \(period.month)"
         panel.prompt = "Import and Reconcile"
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.allowedContentTypes = [UTType(filenameExtension: "xlsx")].compactMap { $0 }
+        panel.allowedContentTypes = [UTType(filenameExtension: "csv")].compactMap { $0 }
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         isWorking = true
         messageLabel.textColor = .secondaryLabelColor
-        messageLabel.stringValue = "Importing and reconciling IMS…"
+        messageLabel.stringValue = "Importing and reconciling IMS records…"
         render()
         Task.detached {
             do {
@@ -2320,7 +2333,7 @@ final class GstDashboardWindowController: NSWindowController {
                     self.showImsResults(imported)
                     self.reload()
                     self.messageLabel.textColor = .secondaryLabelColor
-                    self.messageLabel.stringValue = "IMS snapshot imported and reconciled"
+                    self.messageLabel.stringValue = "IMS CSV imported and reconciled"
                 }
             } catch {
                 await MainActor.run {

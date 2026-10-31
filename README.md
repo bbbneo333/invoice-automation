@@ -404,7 +404,7 @@ counts, GST amounts, estimated balance and standard due dates, and can be
 confirmed locally after completion. GST portal extensions take precedence over
 the displayed standard dates.
 
-**Effective GST** includes eligible bills matched by an imported GSTR-2B, plus
+**Confirmed ITC (GSTR-2B)** includes eligible bills matched by an imported GSTR-2B, plus
 any exceptional bills explicitly confirmed with the manual override. **Manage
 Bills** adds, edits or deletes local records with a label, bill date, GST amount
 and total amount. Quarter-end reconciliation lets you choose which month of the
@@ -416,24 +416,26 @@ optional `₹` or `INR` prefix; stored values are normalized to two decimals.
 
 A missing bill remains anchored to its original bill month and is shown as a
 carried-forward pending item in later periods. When a later GSTR-2B import
-matches it, its GST is included in Effective GST for the imported filing period,
+matches it, its GST is included in Confirmed ITC (GSTR-2B) for the imported filing period,
 while the original month shows it as resolved later. This prevents a credit
-found in a later quarter from rewriting the Effective GST of an already
+found in a later quarter from rewriting the Confirmed ITC (GSTR-2B) of an already
 completed quarter.
 
-The checklist also provides **Import IMS** for each available period. On the GST
-portal, use **Download IMS Details (Excel)** and select that XLSX in the app.
-IMS is available continuously; the checklist shows the 14th of the following
-month as the recommended monthly reconciliation date, after the normal supplier
-GSTR-1/IFF cut-offs. You can import earlier, but the app will request a refreshed
-snapshot on that date if the saved import was taken before it.
-The importer reads the complete workbook, including its accepted, rejected,
-pending and no-action sheets; matches existing and previous bills; and adds
-untracked IMS invoices provisionally. Repeated imports report records that are
-new, changed or removed since the previous IMS snapshot. A bill seen in IMS is
-labelled **Awaiting 2B** and does not enter Effective GST, even when its IMS
-action is Accepted. Accept, Reject and Pending actions must still be performed
-on the GST portal.
+The checklist provides **Import IMS CSV** for each available period. From the
+GST portal IMS dashboard, download the B2B table and select its CSV export. The
+importer validates the portal header and recipient GSTIN in the filename, then
+reads each supplier, invoice date/number, taxable value, tax, total, IMS action,
+source return period and supplier filing status. It accepts only the verified
+GST portal IMS B2B CSV format; Received e-invoice JSON and IMS XLSX files are not
+treated as IMS imports.
+
+The import matches existing and previous bills and provisionally adds untracked
+invoices. Repeated imports report records that are new, changed or removed.
+IMS matches remain **Awaiting 2B** and do not enter Confirmed ITC (GSTR-2B) until GSTR-2B
+confirms the credit. The checklist shows the 14th of the following month as the
+recommended reconciliation date after normal supplier GSTR-1/IFF cut-offs and
+requests a refresh when an earlier snapshot is stale. IMS actions must still be
+performed on the GST portal.
 
 The quarter-end checklist provides **Import GSTR-2B** when the statement is
 normally available. Download the JSON or XLSX from the GST portal and select it
@@ -444,14 +446,14 @@ A unique match confirms the existing bill; an unmatched portal invoice is added
 to the local tracker; multiple possible matches are left for review. The result
 window shows portal, matched, added, ambiguous, locally missing, previous-period
 resolved and ITC totals. Ineligible GSTR-2B rows remain visible but do not enter
-Effective GST. Re-importing the same statement does not duplicate bills.
+Confirmed ITC (GSTR-2B). Re-importing the same statement does not duplicate bills.
 
 For QRMP, GSTR-2B is reconciled once for the full quarter from the M3 checklist;
 under the current portal flow that quarterly statement is normally generated on
 the 14th after quarter end. The app therefore does not present an M1/M2 GSTR-2B
 import step.
 
-The quarter estimate subtracts Effective GST from output GST. It intentionally
+The quarter estimate subtracts Confirmed ITC (GSTR-2B) from output GST. It intentionally
 does not include existing credit-ledger balances, PMT-06 deposits, reversals or
 other GSTR-3B adjustments, so it is a tracking estimate rather than a return.
 
@@ -468,7 +470,7 @@ ruby src/time_log.rb mark-pmt06-reviewed "October 2026"
 ruby src/time_log.rb mark-pmt06-paid "October 2026"
 ruby src/time_log.rb generate-gst "December 2026"
 ruby src/time_log.rb mark-gstr1-filed "December 2026"
-ruby src/time_log.rb import-ims "October 2026" /path/to/ims.xlsx
+ruby src/time_log.rb import-ims "October 2026" /path/to/IMS_B2B_export.csv
 ruby src/time_log.rb ims-import "October 2026"
 ruby src/time_log.rb import-gstr2b "December 2026" /path/to/gstr2b.json
 ruby src/time_log.rb gstr2b-import "December 2026"

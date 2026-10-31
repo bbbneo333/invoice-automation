@@ -835,7 +835,7 @@ if $PROGRAM_NAME == __FILE__
       bill_month, id = ARGV
       GstInputTracker.delete(TimeLog.load_config, bill_month, id)
     when "import-ims"
-      abort("Usage: ruby src/time_log.rb import-ims \"October 2026\" /path/to/ims.xlsx") unless ARGV.length == 2
+      abort("Usage: ruby src/time_log.rb import-ims \"October 2026\" /path/to/IMS_B2B_export.csv") unless ARGV.length == 2
       filing_period, import_path = ARGV
       ImsImporter.import(TimeLog.load_config, filing_period, import_path)
     when "ims-import"

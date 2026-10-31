@@ -1,9 +1,8 @@
+require "csv"
 require "date"
 require "digest"
 require "json"
-require "rexml/document"
 require "time"
-require_relative "backend_dependencies"
 require_relative "gstr2b_importer"
 require_relative "gst_input_tracker"
 require_relative "invoice_calculation"
@@ -12,8 +11,7 @@ require_relative "invoice_store"
 module ImsImporter
   ConfigError = InvoiceCalculation::ConfigError
   STATE_VERSION = 1
-  ACTION_KEYS = %w[action action_taken recipient_action recipient_s_action action_taken_by_recipient ims_action status record_status].freeze
-  DOCUMENT_TYPE_KEYS = %w[document_type documenttype invoice_type invoicetype].freeze
+  REQUIRED_HEADERS = %w[gstin_of_supplier invoice_number invoice_date invoice_value status].freeze
 
   module_function
 
@@ -44,11 +42,13 @@ module ImsImporter
 
   def import(config, period, path, now: Time.now.utc)
     expanded = File.expand_path(path.to_s)
-    raise ConfigError, "Select an existing IMS XLSX file" unless File.file?(expanded)
-    raise ConfigError, "IMS import supports the GST portal XLSX file" unless File.extname(expanded).downcase == ".xlsx"
+    raise ConfigError, "Select an existing GST portal IMS B2B CSV file" unless File.file?(expanded)
+    raise ConfigError, "IMS import supports the GST portal IMS B2B CSV file" unless File.extname(expanded).downcase == ".csv"
 
-    invoices = parse_xlsx(expanded)
-    raise ConfigError, "No invoice records were found in the selected IMS file" if invoices.empty?
+    parsed = parse_csv(expanded)
+    invoices = parsed.fetch("invoices")
+    raise ConfigError, "No B2B invoice records were found in the selected IMS CSV" if invoices.empty?
+    validate_recipient!(config, parsed["recipientGstin"])
 
     state = read_state(config)
     previous = state.fetch("imports").values.max_by { |entry| entry.fetch("importedAt", "") }
@@ -59,6 +59,7 @@ module ImsImporter
       "importedAt" => now.iso8601,
       "sourceFilename" => File.basename(expanded),
       "sourceSha256" => Digest::SHA256.file(expanded).hexdigest,
+      "sourceFormat" => "csv",
       "summary" => summary,
       "invoices" => reconciliation.fetch("invoices")
     }
@@ -66,77 +67,73 @@ module ImsImporter
     entry
   end
 
-  def parse_xlsx(path)
-    invoices = []
-    Zip::File.open(path) do |archive|
-      shared_strings = Gstr2bImporter.xlsx_shared_strings(archive)
-      worksheet_names(archive).each do |entry_path, sheet_name|
-        entry = archive.find_entry(entry_path)
-        next unless entry
-        rows = Gstr2bImporter.xlsx_rows(entry.get_input_stream.read, shared_strings)
-        header_index = rows.index { |row| Gstr2bImporter.xlsx_header?(row) }
-        next unless header_index
-        headers = rows.fetch(header_index).each_with_index.to_h do |value, index|
-          [Gstr2bImporter.normalize_key(value), index]
-        end
-        rows.drop(header_index + 1).each do |row|
-          number = Gstr2bImporter.xlsx_value(row, headers, Gstr2bImporter::INVOICE_NUMBER_KEYS)
-          date = Gstr2bImporter.xlsx_value(row, headers, Gstr2bImporter::INVOICE_DATE_KEYS)
-          value_amount = Gstr2bImporter.xlsx_value(row, headers, Gstr2bImporter::INVOICE_VALUE_KEYS)
-          next if number.to_s.strip.empty? || date.to_s.strip.empty? || value_amount.to_s.strip.empty?
-
-          invoice = Gstr2bImporter.normalized_invoice(
-            supplier_gstin: Gstr2bImporter.xlsx_value(row, headers, Gstr2bImporter::SUPPLIER_GSTIN_KEYS),
-            supplier_name: Gstr2bImporter.xlsx_value(row, headers, Gstr2bImporter::SUPPLIER_NAME_KEYS),
-            invoice_number: number,
-            invoice_date: Gstr2bImporter.excel_date(date),
-            invoice_value: value_amount,
-            taxable_value: Gstr2bImporter.xlsx_value(row, headers, Gstr2bImporter::TAXABLE_VALUE_KEYS) || 0,
-            gst_amount: Gstr2bImporter.xlsx_tax(row, headers),
-            itc_available: true
-          )
-          action = Gstr2bImporter.xlsx_value(row, headers, ACTION_KEYS)
-          document_type = Gstr2bImporter.xlsx_value(row, headers, DOCUMENT_TYPE_KEYS)
-          invoices << invoice.reject { |key, _| key == "itcAvailable" }.merge(
-            "imsStatus" => ims_status(action || sheet_name),
-            "documentType" => document_type.to_s.strip
-          )
-        end
-      end
+  def parse_csv(path)
+    rows = CSV.read(path, encoding: "bom|utf-8")
+    header_index = rows.index do |row|
+      keys = row.map { |value| Gstr2bImporter.normalize_key(value) }
+      REQUIRED_HEADERS.all? { |header| keys.include?(header) }
     end
-    invoices.each_with_object({}) { |invoice, result| result[invoice.fetch("documentKey")] = invoice }.values
-  rescue Zip::Error, REXML::ParseException => error
-    raise ConfigError, "Invalid IMS XLSX: #{error.message}"
-  end
+    raise ConfigError, "The selected CSV is not a GST portal IMS B2B export" unless header_index
 
-  def worksheet_names(archive)
-    workbook = archive.find_entry("xl/workbook.xml")
-    relationships = archive.find_entry("xl/_rels/workbook.xml.rels")
-    return archive.glob("xl/worksheets/*.xml").to_h { |entry| [entry.name, File.basename(entry.name)] } unless workbook && relationships
+    headers = rows.fetch(header_index).map { |value| Gstr2bImporter.normalize_key(value) }
+    invoices = rows.drop(header_index + 1).each_with_object([]) do |row, parsed|
+      values = headers.zip(row).to_h
+      number = values["invoice_number"].to_s.strip
+      date = values["invoice_date"].to_s.strip
+      invoice_value = values["invoice_value"].to_s.strip
+      next if number.empty? && date.empty? && invoice_value.empty?
+      raise ConfigError, "IMS CSV contains an incomplete invoice record" if number.empty? || date.empty? || invoice_value.empty?
 
-    relationship_document = REXML::Document.new(relationships.get_input_stream.read)
-    targets = {}
-    REXML::XPath.match(relationship_document, "//Relationship").each do |relationship|
-      targets[relationship.attributes["Id"]] = relationship.attributes["Target"]
+      invoice = Gstr2bImporter.normalized_invoice(
+        supplier_gstin: values["gstin_of_supplier"],
+        supplier_name: values["trade_legal_name"],
+        invoice_number: number,
+        invoice_date: date,
+        invoice_value: invoice_value,
+        taxable_value: values["taxable_value"],
+        gst_amount: %w[integrated_tax central_tax state_ut_tax cess].sum { |key| Gstr2bImporter.numeric(values[key]) },
+        itc_available: true
+      )
+      parsed << invoice.reject { |key, _| key == "itcAvailable" }.merge(
+        "imsStatus" => ims_status(values["status"]),
+        "documentType" => values["invoice_type"].to_s.strip,
+        "placeOfSupply" => values["place_of_supply"].to_s.strip,
+        "remarks" => values["remarks"].to_s.strip,
+        "source" => values["source"].to_s.strip,
+        "sourceReturnPeriod" => values["source_return_period"].to_s.strip,
+        "sourceFilingStatus" => values["source_filing_status"].to_s.strip,
+        "sourceReturnFilingDate" => values["source_return_filing_date"].to_s.strip,
+        "supplierFilingFrequency" => values["filing_frequency_of_supplier"].to_s.strip
+      )
     end
-    workbook_document = REXML::Document.new(workbook.get_input_stream.read)
-    REXML::XPath.match(workbook_document, "//sheet").each_with_object({}) do |sheet, result|
-      target = targets[sheet.attributes["r:id"]]
-      next unless target
-      path = target.start_with?("/") ? target.delete_prefix("/") : File.join("xl", target)
-      result[path] = sheet.attributes["name"].to_s
-    end
+    {
+      "recipientGstin" => recipient_gstin_from_filename(path),
+      "invoices" => invoices.each_with_object({}) { |invoice, result| result[invoice.fetch("documentKey")] = invoice }.values
+    }
+  rescue CSV::MalformedCSVError => error
+    raise ConfigError, "Invalid IMS CSV: #{error.message}"
   end
 
   def ims_status(value)
     text = Gstr2bImporter.normalize_key(value)
-    return "rejected" if text == "r"
-    return "pending" if text == "p"
-    return "accepted" if text == "a"
-    return "rejected" if text.include?("reject")
-    return "pending" if text.include?("pending")
-    return "accepted" if text.include?("accept")
-    "no_action"
+    return "accepted" if %w[a accept accepted].include?(text)
+    return "rejected" if %w[r reject rejected].include?(text)
+    return "pending" if %w[p pending].include?(text)
+    return "no_action" if text.empty? || %w[no_action noaction].include?(text)
+    raise ConfigError, "Unsupported IMS status: #{value}"
+  end
+
+  def recipient_gstin_from_filename(path)
+    match = File.basename(path).match(/\AIMS_B2B_([0-9A-Z]{15})_/i)
+    match && match[1].upcase
+  end
+
+  def validate_recipient!(config, recipient_gstin)
+    configured = config.dig("from", "gst", "gstin").to_s.strip.upcase
+    return if configured.empty? || recipient_gstin.to_s.empty?
+    unless configured == recipient_gstin
+      raise ConfigError, "The selected IMS CSV is for a different recipient GSTIN"
+    end
   end
 
   def snapshot_changes(previous, invoices)
