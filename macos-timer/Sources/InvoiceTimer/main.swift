@@ -91,6 +91,11 @@ struct GstChecklistItem: Decodable {
     let gstAmount: Double?
     let effectiveInputGst: Double?
     let estimatedBalance: Double?
+    let estimatedLiability: Double?
+    let paidAmount: Double?
+    let pendingAmount: Double?
+    let paymentCount: Int?
+    let lastPaymentDate: String?
 }
 
 struct GstDashboardAmounts: Decodable {
@@ -103,6 +108,19 @@ struct GstDashboardAmounts: Decodable {
     let cess: Double
     let outputTax: Double
     let invoiceValue: Double
+}
+
+struct GstPaymentPeriod: Decodable {
+    let month: String
+    let totalPaid: Double
+    let payments: [GstPayment]
+}
+
+struct GstPayment: Decodable {
+    let id: String
+    let period: String
+    let amount: String
+    let paidOn: String
 }
 
 struct GstDashboardInvoice: Decodable {
@@ -496,6 +514,26 @@ final class TimeLogClient {
     func gstDashboard() throws -> GstDashboard {
         let output = try runData("gst-dashboard")
         return try JSONDecoder().decode(GstDashboard.self, from: output)
+    }
+
+    func gstPayments(month: String) throws -> GstPaymentPeriod {
+        let output = try runData("gst-payments", [month])
+        return try JSONDecoder().decode(GstPaymentPeriod.self, from: output)
+    }
+
+    func addGstPayment(month: String, amount: String, paidOn: String) throws -> GstPaymentPeriod {
+        let output = try runData("add-gst-payment", [month, amount, paidOn])
+        return try JSONDecoder().decode(GstPaymentPeriod.self, from: output)
+    }
+
+    func updateGstPayment(month: String, id: String, amount: String, paidOn: String) throws -> GstPaymentPeriod {
+        let output = try runData("update-gst-payment", [month, id, amount, paidOn])
+        return try JSONDecoder().decode(GstPaymentPeriod.self, from: output)
+    }
+
+    func deleteGstPayment(month: String, id: String) throws -> GstPaymentPeriod {
+        let output = try runData("delete-gst-payment", [month, id])
+        return try JSONDecoder().decode(GstPaymentPeriod.self, from: output)
     }
 
     func importGstr2b(period: String, path: String) throws -> Gstr2bImportData {
@@ -1737,6 +1775,265 @@ final class Gstr2bResultsWindowController: NSWindowController, NSTableViewDataSo
 }
 
 @MainActor
+final class GstPaymentsWindowController: NSWindowController, NSTableViewDataSource, NSTableViewDelegate {
+    private let client = TimeLogClient()
+    private var monthLabel: String
+    private var data: GstPaymentPeriod?
+    private let tableView = NSTableView()
+    private let summaryLabel = NSTextField(labelWithString: "")
+    private let messageLabel = NSTextField(wrappingLabelWithString: "")
+    private let editButton = NSButton(title: "Edit", target: nil, action: nil)
+    private let deleteButton = NSButton(title: "Delete", target: nil, action: nil)
+    var onChange: (() -> Void)?
+
+    init(monthLabel: String) {
+        self.monthLabel = monthLabel
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 360),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "GST Payments - \(monthLabel)"
+        window.minSize = NSSize(width: 460, height: 320)
+        super.init(window: window)
+        buildUI()
+        reload()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setMonth(_ month: String) {
+        monthLabel = month
+        window?.title = "GST Payments - \(month)"
+        reload()
+    }
+
+    private func buildUI() {
+        guard let contentView = window?.contentView else { return }
+        let root = NSStackView()
+        root.orientation = .vertical
+        root.spacing = 12
+        root.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(root)
+        NSLayoutConstraint.activate([
+            root.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            root.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            root.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 16),
+            root.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16)
+        ])
+
+        let note = NSTextField(wrappingLabelWithString: "Record a payment only after it is credited in the GST portal's Electronic Cash Ledger.")
+        note.textColor = .secondaryLabelColor
+        root.addArrangedSubview(note)
+
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.borderType = .bezelBorder
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.usesAlternatingRowBackgroundColors = true
+        tableView.rowHeight = 28
+        tableView.target = self
+        tableView.doubleAction = #selector(editSelected)
+        addColumn("date", "Payment date", 180)
+        addColumn("amount", "Amount", 180)
+        scroll.documentView = tableView
+        root.addArrangedSubview(scroll)
+        scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: 170).isActive = true
+
+        let actions = NSStackView()
+        actions.orientation = .horizontal
+        actions.alignment = .centerY
+        actions.spacing = 8
+        actions.addArrangedSubview(NSButton(title: "Record Payment", target: self, action: #selector(addPayment)))
+        editButton.target = self
+        editButton.action = #selector(editSelected)
+        deleteButton.target = self
+        deleteButton.action = #selector(deleteSelected)
+        actions.addArrangedSubview(editButton)
+        actions.addArrangedSubview(deleteButton)
+        actions.addArrangedSubview(NSButton(title: "Refresh", target: self, action: #selector(refreshClicked)))
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        actions.addArrangedSubview(spacer)
+        root.addArrangedSubview(actions)
+        actions.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+
+        root.addArrangedSubview(summaryLabel)
+        messageLabel.textColor = .systemRed
+        root.addArrangedSubview(messageLabel)
+        messageLabel.widthAnchor.constraint(equalTo: root.widthAnchor).isActive = true
+        updateSelectionActions()
+    }
+
+    private func addColumn(_ identifier: String, _ title: String, _ width: CGFloat) {
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(identifier))
+        column.title = title
+        column.width = width
+        tableView.addTableColumn(column)
+    }
+
+    private func reload() {
+        do {
+            data = try client.gstPayments(month: monthLabel)
+            messageLabel.stringValue = ""
+            render()
+        } catch {
+            messageLabel.stringValue = error.localizedDescription
+        }
+    }
+
+    private func render() {
+        tableView.reloadData()
+        let count = data?.payments.count ?? 0
+        summaryLabel.stringValue = "Paid \(money(data?.totalPaid ?? 0))  ·  \(count) \(count == 1 ? "payment" : "payments")"
+        updateSelectionActions()
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        data?.payments.count ?? 0
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard let payment = data?.payments[row], let identifier = tableColumn?.identifier.rawValue else { return nil }
+        let field = NSTextField(labelWithString: "")
+        switch identifier {
+        case "date": field.stringValue = displayDate(payment.paidOn)
+        case "amount":
+            field.stringValue = money(Double(payment.amount) ?? 0)
+            field.alignment = .right
+        default: break
+        }
+        return field
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        updateSelectionActions()
+    }
+
+    private var selectedPayment: GstPayment? {
+        let row = tableView.selectedRow
+        guard row >= 0, let payments = data?.payments, payments.indices.contains(row) else { return nil }
+        return payments[row]
+    }
+
+    private func updateSelectionActions() {
+        let selected = selectedPayment != nil
+        editButton.isEnabled = selected
+        deleteButton.isEnabled = selected
+    }
+
+    @objc private func addPayment() {
+        presentEditor(payment: nil)
+    }
+
+    @objc private func editSelected() {
+        guard let payment = selectedPayment else { return }
+        presentEditor(payment: payment)
+    }
+
+    @objc private func deleteSelected() {
+        guard let payment = selectedPayment else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete this GST payment?"
+        alert.informativeText = "\(money(Double(payment.amount) ?? 0)) paid on \(displayDate(payment.paidOn))."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.alertStyle = .warning
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            data = try client.deleteGstPayment(month: monthLabel, id: payment.id)
+            messageLabel.stringValue = ""
+            render()
+            onChange?()
+        } catch {
+            messageLabel.stringValue = error.localizedDescription
+        }
+    }
+
+    private func presentEditor(payment: GstPayment?) {
+        let alert = NSAlert()
+        alert.messageText = payment == nil ? "Record GST Payment" : "Edit GST Payment"
+        alert.informativeText = "Use the amount and credit date shown in the GST portal's Electronic Cash Ledger."
+        alert.addButton(withTitle: payment == nil ? "Record" : "Save")
+        alert.addButton(withTitle: "Cancel")
+
+        let amountField = NSTextField(string: payment?.amount ?? "")
+        amountField.placeholderString = "Amount"
+        let datePicker = NSDatePicker()
+        datePicker.datePickerStyle = .textFieldAndStepper
+        datePicker.datePickerElements = [.yearMonthDay]
+        datePicker.dateValue = payment.flatMap { parseDate($0.paidOn) } ?? Date()
+        let grid = NSGridView(views: [
+            [NSTextField(labelWithString: "Amount"), amountField],
+            [NSTextField(labelWithString: "Payment date"), datePicker]
+        ])
+        grid.rowSpacing = 8
+        grid.columnSpacing = 10
+        grid.frame = NSRect(x: 0, y: 0, width: 340, height: 70)
+        grid.column(at: 1).width = 220
+        alert.accessoryView = grid
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            if let payment {
+                data = try client.updateGstPayment(
+                    month: monthLabel, id: payment.id, amount: amountField.stringValue, paidOn: isoDate(datePicker.dateValue)
+                )
+            } else {
+                data = try client.addGstPayment(
+                    month: monthLabel, amount: amountField.stringValue, paidOn: isoDate(datePicker.dateValue)
+                )
+            }
+            messageLabel.stringValue = ""
+            render()
+            onChange?()
+        } catch {
+            messageLabel.stringValue = error.localizedDescription
+        }
+    }
+
+    @objc private func refreshClicked() {
+        reload()
+    }
+
+    private func money(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = Locale(identifier: "en_IN")
+        formatter.currencyCode = "INR"
+        formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "₹%.2f", value)
+    }
+
+    private func parseDate(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: value)
+    }
+
+    private func isoDate(_ value: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: value)
+    }
+
+    private func displayDate(_ value: String) -> String {
+        guard let date = parseDate(value) else { return value }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_IN")
+        formatter.dateFormat = "d MMM yyyy"
+        return formatter.string(from: date)
+    }
+}
+
+@MainActor
 final class GstDashboardWindowController: NSWindowController {
     private let client = TimeLogClient()
     private var dashboard: GstDashboard?
@@ -1753,6 +2050,7 @@ final class GstDashboardWindowController: NSWindowController {
     private let checklistStack = NSStackView()
     private let messageLabel = NSTextField(wrappingLabelWithString: "")
     private var billsWindow: GstBillsWindowController?
+    private var paymentsWindow: GstPaymentsWindowController?
     private var imsResultsWindow: ImsResultsWindowController?
     private var gstr2bResultsWindow: Gstr2bResultsWindowController?
 
@@ -2099,10 +2397,19 @@ final class GstDashboardWindowController: NSWindowController {
                 state = "Generate the JSON first"
             }
             return [state, due].compactMap { $0 }.joined(separator: " · ")
-        case "paymentReview", "payment", "gstr3bReview", "gstr3b":
-            let balance = item.estimatedBalance ?? 0
-            let estimate = balance >= 0 ? "Estimated payable \(money(balance))" : "Estimated excess input credit \(money(abs(balance)))"
-            let summary = "\(estimate) · Output GST \(money(item.gstAmount ?? 0)) · Confirmed ITC (GSTR-2B) \(money(item.effectiveInputGst ?? 0))"
+        case "payment":
+            var parts = [
+                "Estimated liability \(money(item.estimatedLiability ?? 0))",
+                "Paid \(money(item.paidAmount ?? 0))",
+                "Pending \(money(item.pendingAmount ?? 0))"
+            ]
+            if let lastPaymentDate = item.lastPaymentDate {
+                parts.append("Last paid \(displayDate(lastPaymentDate))")
+            }
+            if let due { parts.append(due) }
+            return parts.joined(separator: " · ")
+        case "gstr3bReview", "gstr3b":
+            let summary = "Estimated liability \(money(item.estimatedLiability ?? 0)) · Paid \(money(item.paidAmount ?? 0)) · Pending \(money(item.pendingAmount ?? 0))"
             if let completedAt = item.completedAt {
                 return "Completed \(displayTimestamp(completedAt)) · \(summary)"
             }
@@ -2140,8 +2447,8 @@ final class GstDashboardWindowController: NSWindowController {
         case "generate": return "Generate"
         case "viewJson": return "View JSON"
         case "markFiled": return item.status == "complete" ? "Filed" : "Mark Filed"
-        case "markPmt06Reviewed", "markGstr3bReviewed": return item.status == "complete" ? "Reviewed" : "Mark Reviewed"
-        case "markPmt06Paid": return item.status == "complete" ? "Paid" : "Mark Paid"
+        case "managePayments": return item.status == "complete" ? "Payments" : "Record Payment"
+        case "markGstr3bReviewed": return item.status == "complete" ? "Reviewed" : "Mark Reviewed"
         case "markGstr3bFiled": return item.status == "complete" ? "Filed" : "Mark Filed"
         default: return "Done"
         }
@@ -2151,6 +2458,7 @@ final class GstDashboardWindowController: NSWindowController {
         guard !isWorking else { return false }
         switch item.action {
         case "manageBills": return true
+        case "managePayments": return true
         case "importIms": return item.status == "ready" || item.status == "attention"
         case "viewIms": return true
         case "importGstr2b": return item.status == "ready"
@@ -2158,8 +2466,7 @@ final class GstDashboardWindowController: NSWindowController {
         case "generate": return period.canGenerate
         case "viewJson": return period.outputPath.map { FileManager.default.fileExists(atPath: $0) } == true
         case "markFiled": return item.status != "complete" && period.status == "generated"
-        case "markPmt06Reviewed", "markGstr3bReviewed": return item.status != "complete" && item.status == "ready"
-        case "markPmt06Paid": return item.status != "complete" && item.status == "ready"
+        case "markGstr3bReviewed": return item.status != "complete" && item.status == "ready"
         case "markGstr3bFiled": return item.status != "complete" && item.status == "ready"
         default: return false
         }
@@ -2235,6 +2542,8 @@ final class GstDashboardWindowController: NSWindowController {
         switch sender.checklistAction {
         case "manageBills":
             manageBillsForSelectedPeriod()
+        case "managePayments":
+            managePaymentsForSelectedPeriod()
         case "importIms":
             importImsForSelectedPeriod()
         case "viewIms":
@@ -2249,20 +2558,6 @@ final class GstDashboardWindowController: NSWindowController {
             viewSelected()
         case "markFiled":
             markSelectedFiled()
-        case "markPmt06Reviewed":
-            confirmManualChecklistTask(
-                command: "mark-pmt06-reviewed",
-                title: "Mark the monthly GST liability as reviewed?",
-                explanation: "Confirm that you reviewed the portal liability and generated the PMT-06 challan. This confirmation is stored locally.",
-                success: "PMT-06 liability review completed"
-            )
-        case "markPmt06Paid":
-            confirmManualChecklistTask(
-                command: "mark-pmt06-paid",
-                title: "Mark \(selectedPeriod?.month ?? "this period") PMT-06 as paid?",
-                explanation: "Do this only after payment succeeds on the GST portal. This records the confirmation locally.",
-                success: "PMT-06 marked paid"
-            )
         case "markGstr3bReviewed":
             confirmManualChecklistTask(
                 command: "mark-gstr3b-reviewed",
@@ -2280,6 +2575,22 @@ final class GstDashboardWindowController: NSWindowController {
         default:
             break
         }
+    }
+
+    private func managePaymentsForSelectedPeriod() {
+        guard let period = selectedPeriod else { return }
+        if paymentsWindow == nil {
+            paymentsWindow = GstPaymentsWindowController(monthLabel: period.month)
+            paymentsWindow?.onChange = { [weak self] in
+                self?.reload()
+            }
+        } else {
+            paymentsWindow?.setMonth(period.month)
+        }
+        paymentsWindow?.showWindow(nil)
+        paymentsWindow?.window?.center()
+        paymentsWindow?.window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     private func manageBillsForSelectedPeriod() {

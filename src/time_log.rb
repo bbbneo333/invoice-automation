@@ -798,7 +798,7 @@ if $PROGRAM_NAME == __FILE__
     end
   end
 
-  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|gst-dashboard|gst-bills|add-gst-bill|update-gst-bill|delete-gst-bill|import-ims|ims-import|import-gstr2b|gstr2b-import|set-gst-preference|generate-gst|generate-iff|mark-iff-filed|mark-gstr1-filed|mark-pmt06-reviewed|mark-pmt06-paid|mark-gstr3b-reviewed|mark-gstr3b-filed [\"May 2026\"]") if command.nil?
+  abort("Usage: ruby src/time_log.rb status|start|pause|finish|discard|total|sync|generate|gst-dashboard|gst-payments|add-gst-payment|update-gst-payment|delete-gst-payment|gst-bills|add-gst-bill|update-gst-bill|delete-gst-bill|import-ims|ims-import|import-gstr2b|gstr2b-import|set-gst-preference|generate-gst|generate-iff|mark-iff-filed|mark-gstr1-filed|mark-gstr3b-reviewed|mark-gstr3b-filed [\"May 2026\"]") if command.nil?
 
   begin
     result = case command
@@ -812,6 +812,20 @@ if $PROGRAM_NAME == __FILE__
       TimeLog.storagePaths
     when "gst-dashboard"
       GstFiling.dashboard(TimeLog.load_config)
+    when "gst-payments"
+      GstFiling.payments(TimeLog.load_config, month_label)
+    when "add-gst-payment"
+      abort("Usage: ruby src/time_log.rb add-gst-payment \"October 2026\" AMOUNT YYYY-MM-DD") unless ARGV.length == 3
+      payment_month, amount, paid_on = ARGV
+      GstFiling.add_payment(TimeLog.load_config, payment_month, amount: amount, paid_on: paid_on)
+    when "update-gst-payment"
+      abort("Usage: ruby src/time_log.rb update-gst-payment \"October 2026\" ID AMOUNT YYYY-MM-DD") unless ARGV.length == 4
+      payment_month, id, amount, paid_on = ARGV
+      GstFiling.update_payment(TimeLog.load_config, payment_month, id, amount: amount, paid_on: paid_on)
+    when "delete-gst-payment"
+      abort("Usage: ruby src/time_log.rb delete-gst-payment \"October 2026\" ID") unless ARGV.length == 2
+      payment_month, id = ARGV
+      GstFiling.delete_payment(TimeLog.load_config, payment_month, id)
     when "gst-bills"
       GstInputTracker.month(TimeLog.load_config, month_label)
     when "add-gst-bill"

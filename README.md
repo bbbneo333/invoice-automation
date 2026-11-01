@@ -453,9 +453,12 @@ under the current portal flow that quarterly statement is normally generated on
 the 14th after quarter end. The app therefore does not present an M1/M2 GSTR-2B
 import step.
 
-The quarter estimate subtracts Confirmed ITC (GSTR-2B) from output GST. It intentionally
-does not include existing credit-ledger balances, PMT-06 deposits, reversals or
-other GSTR-3B adjustments, so it is a tracking estimate rather than a return.
+The liability estimate subtracts Confirmed ITC (GSTR-2B) from output GST. GST
+payments are recorded locally using only their amount and the date credited in
+the portal's Electronic Cash Ledger. The dashboard shows the recorded total as
+**Paid** and subtracts it to show **Pending**. Existing credit-ledger balances,
+reversals and other GSTR-3B adjustments are not available to the app, so Pending
+remains a tracking estimate rather than the portal's final liability.
 
 IFF JSON contains only the supported B2B invoice section. Quarterly GSTR-1
 includes B2B rows not already marked as filed through IFF, while its HSN summary
@@ -466,8 +469,10 @@ The equivalent CLI commands are:
 ```sh
 ruby src/time_log.rb generate-iff "October 2026"
 ruby src/time_log.rb mark-iff-filed "October 2026"
-ruby src/time_log.rb mark-pmt06-reviewed "October 2026"
-ruby src/time_log.rb mark-pmt06-paid "October 2026"
+ruby src/time_log.rb gst-payments "October 2026"
+ruby src/time_log.rb add-gst-payment "October 2026" 15990.00 2026-11-01
+ruby src/time_log.rb update-gst-payment "October 2026" PAYMENT_ID 16000.00 2026-11-01
+ruby src/time_log.rb delete-gst-payment "October 2026" PAYMENT_ID
 ruby src/time_log.rb generate-gst "December 2026"
 ruby src/time_log.rb mark-gstr1-filed "December 2026"
 ruby src/time_log.rb import-ims "October 2026" /path/to/IMS_B2B_export.csv
@@ -483,10 +488,10 @@ ruby src/time_log.rb add-gst-bill "October 2026" "Cloud hosting" 2026-10-04 18.0
 ruby src/time_log.rb update-gst-bill "January 2027" BILL_ID "Cloud hosting" 2026-10-04 18.00 118.00 found "January 2027"
 ```
 
-The dashboard records local generation and user-confirmed portal payment or
-filing. It does not upload to the GST portal, verify portal status, calculate
-the portal's final liability after ledger adjustments, make a PMT-06 payment,
-or file GSTR-3B.
+The dashboard records local generation, payments entered after portal cash-ledger
+credit, and user-confirmed filing. It does not upload to the GST portal, verify
+portal status, calculate the portal's final liability after ledger adjustments,
+make a PMT-06 payment, or file GSTR-3B.
 
 For monthly filing, omit `gstFiling` or use `scheme: "monthly"` with
 `iff: "disabled"`.

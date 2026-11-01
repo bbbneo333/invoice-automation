@@ -408,25 +408,35 @@ class QrmpGenerationTest < Minitest::Test
     assert_equal 1, generate.fetch("invoiceCount")
     assert_equal 65_141.8, generate.fetch("gstAmount")
 
-    payment_review = october.fetch("checklist").find { |item| item.fetch("id") == "paymentReview" }
-    assert_equal "Review October 2026 GST liability and generate the PMT-06 challan on the GST portal", payment_review.fetch("title")
-    assert_equal "ready", payment_review.fetch("status")
+    refute october.fetch("checklist").any? { |item| item.fetch("id") == "paymentReview" }
     payment = october.fetch("checklist").find { |item| item.fetch("id") == "payment" }
-    assert_equal "Pay the October 2026 PMT-06 challan on the GST portal", payment.fetch("title")
+    assert_equal "Generate and pay the October 2026 PMT-06 challan on the GST portal", payment.fetch("title")
     assert_equal "2026-11-25", payment.fetch("dueDate")
     assert_equal 63_341.8, payment.fetch("estimatedBalance")
-    assert_equal "blocked", payment.fetch("status")
+    assert_equal 63_341.8, payment.fetch("estimatedLiability")
+    assert_equal 0.0, payment.fetch("paidAmount")
+    assert_equal 63_341.8, payment.fetch("pendingAmount")
+    assert_equal "ready", payment.fetch("status")
+    assert_equal "managePayments", payment.fetch("action")
 
-    GstFiling.mark_task_complete(@config, "October 2026", "pmt06_review", now: Time.utc(2026, 11, 19, 10))
-    GstFiling.mark_task_complete(@config, "October 2026", "pmt06", now: Time.utc(2026, 11, 20, 10))
+    GstFiling.add_payment(
+      @config, "October 2026", amount: "30,000.00", paid_on: "2026-11-20", now: Time.utc(2026, 11, 20, 10)
+    )
     refreshed = GstFiling.dashboard(@config, now: Time.local(2026, 11, 20, 12))
     october = refreshed.fetch("periods").find { |period| period.fetch("month") == "October 2026" }
     payment = october.fetch("checklist").find { |item| item.fetch("id") == "payment" }
     assert_equal "complete", payment.fetch("status")
-    assert_equal "2026-11-20T10:00:00Z", payment.fetch("completedAt")
+    assert_equal 30_000.0, payment.fetch("paidAmount")
+    assert_equal 33_341.8, payment.fetch("pendingAmount")
+    assert_equal "2026-11-20", payment.fetch("lastPaymentDate")
+    november = refreshed.fetch("periods").find { |period| period.fetch("month") == "November 2026" }
+    november_payment = november.fetch("checklist").find { |item| item.fetch("id") == "payment" }
+    assert_equal 128_483.6, november_payment.fetch("estimatedLiability")
+    assert_equal 30_000.0, november_payment.fetch("paidAmount")
+    assert_equal 98_483.6, november_payment.fetch("pendingAmount")
     preference = refreshed.fetch("preferences").find { |item| item.fetch("quarterLabel") == "October-December 2026" }
     assert preference.fetch("locked")
-    assert_includes preference.fetch("lockReason"), "checklist action"
+    assert_includes preference.fetch("lockReason"), "payment"
 
     december = dashboard.fetch("periods").find { |period| period.fetch("month") == "December 2026" }
     assert_equal "Record October-December 2026 purchase bills", december.fetch("checklist").first.fetch("title")
@@ -437,6 +447,10 @@ class QrmpGenerationTest < Minitest::Test
     gstr3b = december.fetch("checklist").find { |item| item.fetch("id") == "gstr3b" }
     assert_equal "2027-01-24", gstr3b.fetch("dueDate")
     assert_equal "blocked", gstr3b.fetch("status")
+    refreshed_december = refreshed.fetch("periods").find { |period| period.fetch("month") == "December 2026" }
+    refreshed_gstr3b = refreshed_december.fetch("checklist").find { |item| item.fetch("id") == "gstr3b" }
+    assert_equal 30_000.0, refreshed_gstr3b.fetch("paidAmount")
+    assert_equal 163_625.4, refreshed_gstr3b.fetch("pendingAmount")
     assert_equal 7, december.fetch("checklist").length
   end
 
@@ -450,6 +464,37 @@ class QrmpGenerationTest < Minitest::Test
     assert_raises(GstFiling::ConfigError) do
       GstFiling.mark_task_complete(@config, "November 2026", "pmt06")
     end
+  end
+
+  def test_records_updates_and_deletes_gst_payments_with_grouped_amounts
+    first = GstFiling.add_payment(
+      @config, "October 2026", amount: "₹ 15,990.00", paid_on: "2026-11-01", now: Time.utc(2026, 11, 1, 10)
+    )
+    assert_equal 15_990.0, first.fetch("totalPaid")
+    assert_equal "15990.00", first.fetch("payments").first.fetch("amount")
+    assert_equal "2026-11-01", first.fetch("payments").first.fetch("paidOn")
+
+    payment_id = first.fetch("payments").first.fetch("id")
+    second = GstFiling.add_payment(
+      @config, "October 2026", amount: "1,000", paid_on: "2026-11-02", now: Time.utc(2026, 11, 2, 10)
+    )
+    assert_equal 16_990.0, second.fetch("totalPaid")
+
+    updated = GstFiling.update_payment(
+      @config, "October 2026", payment_id, amount: "16,000", paid_on: "2026-11-03", now: Time.utc(2026, 11, 3, 10)
+    )
+    assert_equal 17_000.0, updated.fetch("totalPaid")
+    assert_equal "2026-11-03", updated.fetch("payments").last.fetch("paidOn")
+
+    remaining_id = updated.fetch("payments").find { |entry| entry.fetch("id") != payment_id }.fetch("id")
+    remaining = GstFiling.delete_payment(@config, "October 2026", remaining_id)
+    assert_equal 16_000.0, remaining.fetch("totalPaid")
+    assert_equal 1, remaining.fetch("payments").length
+
+    error = assert_raises(GstFiling::ConfigError) do
+      GstFiling.add_payment(@config, "October 2026", amount: "0", paid_on: "2026-11-01")
+    end
+    assert_includes error.message, "greater than zero"
   end
 
   def test_standard_gstr3b_due_date_uses_supplier_state_group
@@ -504,13 +549,15 @@ class QrmpGenerationTest < Minitest::Test
     result = JSON.parse(stdout)
     assert_equal "filed", result.fetch("gstIffPeriods").first.fetch("status")
 
-    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-pmt06-reviewed", "October 2026")
+    stdout, stderr, status = Open3.capture3(
+      environment, RbConfig.ruby, cli, "add-gst-payment", "October 2026", "15,990.00", "2026-11-20"
+    )
     assert status.success?, stderr
-    assert GstFiling.task_complete?(GstFiling.read_state(@config), "October 2026", "pmt06_review")
-
-    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "mark-pmt06-paid", "October 2026")
+    payment_result = JSON.parse(stdout)
+    assert_equal 15_990.0, payment_result.fetch("totalPaid")
+    stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "gst-payments", "October 2026")
     assert status.success?, stderr
-    assert GstFiling.task_complete?(GstFiling.read_state(@config), "October 2026", "pmt06")
+    assert_equal "2026-11-20", JSON.parse(stdout).fetch("payments").first.fetch("paidOn")
 
     stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, cli, "generate-gst", "December 2026")
     assert status.success?, stderr
