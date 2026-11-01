@@ -2020,6 +2020,14 @@ final class GstDashboardWindowController: NSWindowController {
             button.widthAnchor.constraint(greaterThanOrEqualToConstant: 96).isActive = true
             content.addArrangedSubview(button)
 
+            if item.id == "generate" && item.action == "viewJson" && period.kind == "iff" && period.canGenerate {
+                let regenerateButton = GstChecklistActionButton(title: "Regenerate IFF", target: self, action: #selector(performChecklistAction(_:)))
+                regenerateButton.checklistAction = "generate"
+                regenerateButton.isEnabled = !isWorking
+                regenerateButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 110).isActive = true
+                content.addArrangedSubview(regenerateButton)
+            }
+
             checklistStack.addArrangedSubview(row)
             row.widthAnchor.constraint(equalTo: checklistStack.widthAnchor).isActive = true
         }
@@ -2485,6 +2493,15 @@ final class GstDashboardWindowController: NSWindowController {
 
     @objc private func generateSelected() {
         guard let period = selectedPeriod, period.canGenerate else { return }
+        if period.kind == "iff" && period.status == "generated" {
+            let alert = NSAlert()
+            alert.messageText = "Regenerate \(period.month) IFF JSON?"
+            alert.informativeText = "This replaces the existing JSON using the current invoice data. The IFF will remain unfiled until you confirm filing separately."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Regenerate IFF")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
         let command = period.kind == "iff" ? "generate-iff" : "generate-gst"
         perform(command: command, period: period, success: "\(period.actionTitle) JSON generated")
     }
